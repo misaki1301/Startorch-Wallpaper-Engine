@@ -1,0 +1,32 @@
+{
+  "source": "/Users/shiroha1301/Desktop/ikuyo-live-wallpaper/ikuyo-live-wallpaper/WallpaperManager.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Stop Wallpaper",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 164
+        }
+      },
+      {
+        "comment": "",
+        "key": "Set as Wallpaper",
+        "location": {
+          "startingColumn": 54,
+          "startingLine": 164
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pause Wallpaper",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 172
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "source": "/Users/shiroha1301/Desktop/ikuyo-live-wallpaper/ikuyo-live-wallpaper/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Wallpapers",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Gallery",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 20
+        }
+      },
+      {
+        "comment": "",
+        "key": "Select an item",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 27
+        }
+      }
+    ]
+  },
+  "version": 1
+}

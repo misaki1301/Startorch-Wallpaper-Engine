@@ -1,0 +1,48 @@
+{
+  "source": "/Users/shiroha1301/Desktop/ikuyo-live-wallpaper/ikuyo-live-wallpaper/ikuyo_live_wallpaperApp.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Ikuyo Live Wallpaper",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 14
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stop Wallpaper",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start Wallpaper",
+        "location": {
+          "startingColumn": 67,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pause",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 26
+        }
+      },
+      {
+        "comment": "",
+        "key": "Quit",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 33
+        }
+      }
+    ]
+  },
+  "version": 1
+}

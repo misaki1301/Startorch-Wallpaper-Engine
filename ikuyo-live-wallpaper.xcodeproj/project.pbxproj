@@ -29,20 +29,41 @@
 		5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5EAF0A222FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ikuyo_live_wallpaperTests.swift,
+			);
+			target = 5E9565432FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */;
+		};
+		5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ikuyo_live_wallpaperTests.swift,
+			);
+			target = 5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "ikuyo-live-wallpaper";
 			sourceTree = "<group>";
 		};
-		5E9565472FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "ikuyo-live-wallpaperTests";
-			sourceTree = "<group>";
-		};
 		5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "ikuyo-live-wallpaperUITests";
+			sourceTree = "<group>";
+		};
+		5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5EAF0A222FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperTests" target */,
+				5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUITests" target */,
+			);
+			path = "ikuyo-live-wallpaperTests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -76,7 +97,7 @@
 			isa = PBXGroup;
 			children = (
 				5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
-				5E9565472FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */,
+				5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */,
 				5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
 				5E9565362FF0AFAA005E2EEF /* Products */,
 			);
@@ -130,9 +151,6 @@
 			dependencies = (
 				5E9565462FF0AFAC005E2EEF /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				5E9565472FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */,
-			);
 			name = "ikuyo-live-wallpaperTests";
 			packageProductDependencies = (
 			);
@@ -155,6 +173,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
+				5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */,
 			);
 			name = "ikuyo-live-wallpaperUITests";
 			packageProductDependencies = (
@@ -394,6 +413,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "ikuyo-live-wallpaper/ikuyo-live-wallpaper.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -403,6 +423,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -426,6 +447,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "ikuyo-live-wallpaper/ikuyo-live-wallpaper.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -435,6 +457,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
