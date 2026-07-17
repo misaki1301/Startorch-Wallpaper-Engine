@@ -26,7 +26,7 @@
 /* Begin PBXFileReference section */
 		5E9565352FF0AFAA005E2EEF /* ikuyo-live-wallpaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ikuyo-live-wallpaper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperUStarTorch EngineTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -37,12 +37,12 @@
 			);
 			target = 5E9565432FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */;
 		};
-		5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUStarTorch EngineTests" target */ = {
+		5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUITests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				ikuyo_live_wallpaperTests.swift,
 			);
-			target = 5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests */;
+			target = 5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -61,7 +61,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				5EAF0A222FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperTests" target */,
-				5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUStarTorch EngineTests" target */,
+				5EAF0A232FF5027E0097EA18 /* Exceptions for "ikuyo-live-wallpaperTests" folder in "ikuyo-live-wallpaperUITests" target */,
 			);
 			path = "ikuyo-live-wallpaperTests";
 			sourceTree = "<group>";
@@ -108,7 +108,7 @@
 			children = (
 				5E9565352FF0AFAA005E2EEF /* ikuyo-live-wallpaper.app */,
 				5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */,
-				5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests.xctest */,
+				5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -158,9 +158,9 @@
 			productReference = 5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests */ = {
+		5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 5E95655E2FF0AFAC005E2EEF /* Build configuration list for PBXNativeTarget "ikuyo-live-wallpaperUStarTorch EngineTests" */;
+			buildConfigurationList = 5E95655E2FF0AFAC005E2EEF /* Build configuration list for PBXNativeTarget "ikuyo-live-wallpaperUITests" */;
 			buildPhases = (
 				5E95654A2FF0AFAC005E2EEF /* Sources */,
 				5E95654B2FF0AFAC005E2EEF /* Frameworks */,
@@ -175,11 +175,11 @@
 				5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
 				5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */,
 			);
-			name = "ikuyo-live-wallpaperUStarTorch EngineTests";
+			name = "ikuyo-live-wallpaperUITests";
 			packageProductDependencies = (
 			);
 			productName = "ikuyo-live-wallpaperUITests";
-			productReference = 5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests.xctest */;
+			productReference = 5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -205,7 +205,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 5E9565302FF0AFAA005E2EEF /* Build configuration list for PBXProject "StarTorch Engine" */;
+			buildConfigurationList = 5E9565302FF0AFAA005E2EEF /* Build configuration list for PBXProject "StarTorch Wallpaper Engine" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -221,7 +221,7 @@
 			targets = (
 				5E9565342FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
 				5E9565432FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */,
-				5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUStarTorch EngineTests */,
+				5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -424,7 +424,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "StarTorch Engine";
+				INFOPLIST_KEY_CFBundleDisplayName = "StarTorch Wallpaper Engine";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -462,7 +462,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "StarTorch Engine";
+				INFOPLIST_KEY_CFBundleDisplayName = "StarTorch Wallpaper Engine";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -501,7 +501,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUStarTorch EngineLT_PRODUCTS_DStarTorch EngineR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
+				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
 			};
 			name = Debug;
 		};
@@ -522,7 +522,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUStarTorch EngineLT_PRODUCTS_DStarTorch EngineR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
+				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
 			};
 			name = Release;
 		};
@@ -567,7 +567,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		5E9565302FF0AFAA005E2EEF /* Build configuration list for PBXProject "StarTorch Engine" */ = {
+		5E9565302FF0AFAA005E2EEF /* Build configuration list for PBXProject "StarTorch Wallpaper Engine" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				5E9565562FF0AFAC005E2EEF /* Debug */,
@@ -594,7 +594,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		5E95655E2FF0AFAC005E2EEF /* Build configuration list for PBXNativeTarget "ikuyo-live-wallpaperUStarTorch EngineTests" */ = {
+		5E95655E2FF0AFAC005E2EEF /* Build configuration list for PBXNativeTarget "ikuyo-live-wallpaperUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				5E95655F2FF0AFAC005E2EEF /* Debug */,
