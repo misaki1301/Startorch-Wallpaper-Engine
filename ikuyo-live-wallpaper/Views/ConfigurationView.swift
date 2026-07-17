@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct ConfigurationView: View {
-    @State private var showInDock: Bool = {
-        UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
-    }()
+    @State private var showInDock = true
+    @State private var cacheSize: UInt64 = 0
+    @Environment(WallpaperCacheManager.self) private var cacheManager
 
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
 
@@ -13,6 +13,8 @@ struct ConfigurationView: View {
                 headerSection
                 Divider().padding(.horizontal)
                 dockSection
+                Divider().padding(.horizontal)
+                storageSection
                 Divider().padding(.horizontal)
                 aboutSection
             }
@@ -61,6 +63,42 @@ struct ConfigurationView: View {
         .padding()
     }
 
+    private var storageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Storage")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cached Wallpapers")
+                        .font(.body)
+                    Text(formatBytes(cacheSize))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Clear Cache") {
+                    cacheManager.clearCache()
+                    cacheSize = cacheManager.cacheSize()
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.red)
+                .disabled(cacheSize == 0)
+            }
+        }
+        .padding()
+        .onAppear {
+            if let saved = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool {
+                showInDock = saved
+                NSApplication.shared.setActivationPolicy(saved ? .regular : .accessory)
+            } else {
+                showInDock = NSApplication.shared.activationPolicy() == .regular
+            }
+            cacheSize = cacheManager.cacheSize()
+        }
+    }
+
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("About")
@@ -88,6 +126,12 @@ struct ConfigurationView: View {
         .font(.subheadline)
     }
 
+    private func formatBytes(_ bytes: UInt64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
     private func applyDockSetting(_ show: Bool) {
         UserDefaults.standard.set(show, forKey: "showDockIcon")
         NSApplication.shared.setActivationPolicy(show ? .regular : .accessory)
@@ -99,5 +143,6 @@ struct ConfigurationView: View {
 
 #Preview {
     ConfigurationView()
+        .environment(WallpaperCacheManager())
         .frame(width: 400, height: 400)
 }

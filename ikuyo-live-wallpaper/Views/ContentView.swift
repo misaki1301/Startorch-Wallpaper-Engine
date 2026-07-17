@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
 
-    private let wallpapers: [URL] = [
+    private let wallpapers: [WallpaperItem] = [
         "https://cdn.donmai.us/original/b6/b9/b6b9d3154ebac86ca2cd80b47c2e856c.mp4",
         "https://cdn.donmai.us/original/53/33/5333f37fb7e84233bb75373f281c52ba.mp4",
         "https://cdn.donmai.us/original/fb/2b/fb2baba32375a5509e67b67a63a86abe.mp4",
@@ -12,16 +12,29 @@ struct ContentView: View {
         "https://cdn.donmai.us/original/72/90/7290bf5d6f27c02995a60916881a4665.mp4",
         "https://videos.pexels.com/video-files/19841180/19841180-uhd_2560_1440_60fps.mp4",
         "https://cdn.donmai.us/original/28/00/28008134e9a521ee3166d27b36cf0201.mp4"
-    ].compactMap(URL.init(string:))
+    ].compactMap(URL.init(string:)).map { WallpaperItem(url: $0) }
 
     var body: some View {
         NavigationSplitView {
             List {
                 Section("Wallpapers") {
                     NavigationLink {
-                        WallpaperGalleryView(urls: wallpapers)
+                        WallpaperGalleryView(items: wallpapers)
                     } label: {
                         Label("Gallery", systemImage: "square.grid.2x2")
+                    }
+                    NavigationLink {
+                        FavoritesView(items: wallpapers)
+                    } label: {
+                        Label("Favorites", systemImage: "heart")
+                    }
+                }
+
+                Section("Local") {
+                    NavigationLink {
+                        ImportedWallpaperView()
+                    } label: {
+                        Label("My Files", systemImage: "folder")
                     }
                 }
 
