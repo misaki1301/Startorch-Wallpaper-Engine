@@ -4,7 +4,15 @@ import SwiftData
 @main
 struct ikuyo_live_wallpaperApp: App {
     @State private var wallpaperManager = WallpaperManager()
+    @State private var cacheManager = WallpaperCacheManager()
+    @State private var importedStore = ImportedWallpaperStore()
     @State private var showSplash = true
+    private let statsService = SystemStatsService()
+
+    init() {
+        let showInDock = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
+        NSApplication.shared.setActivationPolicy(showInDock ? .regular : .accessory)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -12,9 +20,11 @@ struct ikuyo_live_wallpaperApp: App {
                 if showSplash {
                     SplashAnimationView()
                         .environment(wallpaperManager)
+                        .environment(cacheManager)
+                        .environment(importedStore)
                         .onAppear {
                             hideTitleBar(true)
-                            applyDockPreference()
+                            statsService.start()
                             resizeWindowForContent()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                                 withAnimation(.easeInOut(duration: 0.5)) {
@@ -25,6 +35,8 @@ struct ikuyo_live_wallpaperApp: App {
                 } else {
                     ContentView()
                         .environment(wallpaperManager)
+                        .environment(cacheManager)
+                        .environment(importedStore)
                         .onAppear {
                             hideTitleBar(false)
                             resizeWindowForContent()
@@ -34,6 +46,10 @@ struct ikuyo_live_wallpaperApp: App {
         }
 
         MenuBarExtra("Ikuyo Live Wallpaper", systemImage: "photo.on.rectangle.angled") {
+            StatsMenuView(stats: statsService)
+
+            Divider()
+
             Button(wallpaperManager.isActive ? "Stop Wallpaper" : "Start Wallpaper") {
                 if wallpaperManager.isActive {
                     wallpaperManager.stop()
@@ -45,8 +61,14 @@ struct ikuyo_live_wallpaperApp: App {
                 }
             }
             if wallpaperManager.isActive {
-                Button("Pause") {
-                    wallpaperManager.pause()
+                if wallpaperManager.isPaused {
+                    Button("Resume") {
+                        wallpaperManager.resume()
+                    }
+                } else {
+                    Button("Pause") {
+                        wallpaperManager.pause()
+                    }
                 }
             }
 
@@ -60,21 +82,39 @@ struct ikuyo_live_wallpaperApp: App {
         }
     }
 }
+struct StatsMenuView: View {
+    @ObservedObject var stats: SystemStatsService
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("CPU:")
+                    .foregroundStyle(.secondary)
+                Text(String(format: "%.1f%%", stats.cpuUsage))
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+
+            HStack {
+                Text("RAM:")
+                    .foregroundStyle(.secondary)
+                Text("\(stats.memoryUsedFormatted) / \(stats.memoryTotalFormatted)")
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 private func hideTitleBar(_ hide: Bool) {
     if let window = NSApplication.shared.windows.first {
         if hide {
             window.styleMask.remove(.titled)
         } else {
             window.styleMask.insert(.titled)
-        }
-    }
-}
-
-private func applyDockPreference() {
-    let showInDock = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
-    if !showInDock {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NSApplication.shared.setActivationPolicy(.accessory)
         }
     }
 }

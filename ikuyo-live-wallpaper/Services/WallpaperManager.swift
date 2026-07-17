@@ -8,34 +8,54 @@ final class WallpaperManager {
     private var windows: [NSWindow] = []
     private var player: AVPlayer?
     private var playerLayers: [AVPlayerLayer] = []
-    private var playerObserver: NSObjectProtocol?
     private var isStopping = false
+    private var playbackURL: URL?
+    private var playerLooper: AVPlayerLooper?
+    private var memoryLoader: MemoryResourceLoader?
 
     private(set) var isActive = false
+    private(set) var isPaused = false
     private(set) var currentURL: URL?
-    private var originalWallpaperURLs: [NSScreen: URL] = [:]
+    private var staticFrameURL: URL?
+    private var screenChangeTimer: Timer?
+
+    // MARK: - Start
 
     func start(with url: URL) {
         if isActive { stop() }
+        isPaused = false
         isStopping = false
 
-        hideDesktopWallpaper()
+        let playbackURL = WallpaperCacheManager.resolvedURL(for: url)
+        self.playbackURL = playbackURL
 
-        let player = AVPlayer(url: url)
-        player.isMuted = true
-        player.actionAtItemEnd = .none
-        player.play()
-        self.player = player
-        currentURL = url
-
-        playerObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player.currentItem,
-            queue: .main
-        ) { notification in
-            guard let item = notification.object as? AVPlayerItem else { return }
-            item.seek(to: .zero, completionHandler: nil)
+        // Extract static frame in background
+        Task { [weak self] in
+            guard let frameURL = await self?.extractFirstFrame(from: url) else { return }
+            await MainActor.run {
+                self?.staticFrameURL = frameURL
+                self?.applyStaticFrame(frameURL)
+            }
         }
+
+        // AVPlayerLooper for seamless gapless looping
+        let playerItem: AVPlayerItem
+        if playbackURL.isFileURL, let data = try? Data(contentsOf: playbackURL) {
+            let loader = MemoryResourceLoader(data: data, fileExtension: playbackURL.pathExtension)
+            memoryLoader = loader
+            let asset = AVURLAsset(url: URL(string: "memory://wallpaper")!)
+            asset.resourceLoader.setDelegate(loader, queue: .main)
+            playerItem = AVPlayerItem(asset: asset)
+        } else {
+            playerItem = AVPlayerItem(url: playbackURL)
+        }
+        playerItem.preferredForwardBufferDuration = 0
+        let queuePlayer = AVQueuePlayer(playerItem: playerItem)
+        queuePlayer.isMuted = true
+        self.playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: playerItem)
+        queuePlayer.play()
+        self.player = queuePlayer
+        currentURL = url
 
         let desktopLevel = Int(CGWindowLevelForKey(.desktopWindow))
 
@@ -43,7 +63,7 @@ final class WallpaperManager {
             let screenRect = screen.frame
             let viewRect = CGRect(origin: .zero, size: screenRect.size)
 
-            let playerLayer = AVPlayerLayer(player: player)
+            let playerLayer = AVPlayerLayer(player: queuePlayer)
             playerLayer.videoGravity = .resizeAspectFill
             playerLayer.frame = viewRect
             playerLayers.append(playerLayer)
@@ -61,6 +81,9 @@ final class WallpaperManager {
             window.level = NSWindow.Level(rawValue: desktopLevel + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
             window.ignoresMouseEvents = true
+            window.isOpaque = true
+            window.backgroundColor = .black
+            window.hasShadow = false
             window.contentView = contentView
             window.orderFrontRegardless()
 
@@ -77,8 +100,16 @@ final class WallpaperManager {
         isActive = true
     }
 
+    // MARK: - Pause / Stop
+
     func pause() {
         player?.pause()
+        isPaused = true
+    }
+
+    func resume() {
+        player?.play()
+        isPaused = false
     }
 
     func stop() {
@@ -86,10 +117,20 @@ final class WallpaperManager {
         isStopping = true
         defer { isStopping = false }
 
-        restoreDesktopWallpaper()
+        screenChangeTimer?.invalidate()
+        screenChangeTimer = nil
+
+        if let frameURL = staticFrameURL {
+            try? FileManager.default.removeItem(at: frameURL)
+            staticFrameURL = nil
+        }
 
         player?.pause()
+        playerLooper?.disableLooping()
+        playerLooper = nil
+        memoryLoader = nil
         player = nil
+        playbackURL = nil
 
         for layer in playerLayers {
             layer.removeFromSuperlayer()
@@ -102,56 +143,69 @@ final class WallpaperManager {
         }
         windows.removeAll()
 
-        if let observer = playerObserver {
-            NotificationCenter.default.removeObserver(observer)
-            playerObserver = nil
-        }
-        NotificationCenter.default.removeObserver(self, name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.removeObserver(self)
 
         currentURL = nil
         isActive = false
+        isPaused = false
     }
 
-    private func hideDesktopWallpaper() {
-        originalWallpaperURLs = [:]
+    // MARK: - Screen Changes
+
+    private func applyStaticFrame(_ frameURL: URL) {
         for screen in NSScreen.screens {
-            originalWallpaperURLs[screen] = NSWorkspace.shared.desktopImageURL(for: screen)
-            writeSolidColorImage()
-            try? NSWorkspace.shared.setDesktopImageURL(solidColorURL, for: screen, options: [
-                .imageScaling: NSImageScaling.scaleAxesIndependently.rawValue,
+            try? NSWorkspace.shared.setDesktopImageURL(frameURL, for: screen, options: [
+                .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
                 .allowClipping: true,
             ])
         }
     }
 
-    private func restoreDesktopWallpaper() {
-        for screen in NSScreen.screens {
-            if let original = originalWallpaperURLs[screen] {
-                try? NSWorkspace.shared.setDesktopImageURL(original, for: screen, options: [:])
+    @objc private func screenParametersDidChange() {
+        guard isActive, let url = currentURL else { return }
+
+        screenChangeTimer?.invalidate()
+        screenChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.restartWithCurrentURL()
             }
         }
-        originalWallpaperURLs = [:]
     }
 
-    private let solidColorURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("ikuyo_solid_bg")
-        .appendingPathExtension("png")
-
-    private func writeSolidColorImage() {
-        let image = NSImage(size: NSSize(width: 1, height: 1))
-        image.lockFocus()
-        NSColor.black.drawSwatch(in: NSRect(x: 0, y: 0, width: 1, height: 1))
-        image.unlockFocus()
-        if let data = image.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: data),
-           let pngData = bitmap.representation(using: .png, properties: [:]) {
-            try? pngData.write(to: solidColorURL)
-        }
-    }
-
-    @objc private func screenParametersDidChange() {
-        guard isActive, let currentURL = (player?.currentItem?.asset as? AVURLAsset)?.url else { return }
+    private func restartWithCurrentURL() {
+        guard let url = currentURL else { return }
         stop()
-        start(with: currentURL)
+        start(with: url)
+    }
+
+    // MARK: - Static Frame Extraction
+
+    private func extractFirstFrame(from videoURL: URL) async -> URL? {
+        let playbackURL = WallpaperCacheManager.resolvedURL(for: videoURL)
+        let asset = AVAsset(url: playbackURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+
+        let targetSize = NSScreen.main?.frame.size ?? CGSize(width: 1920, height: 1080)
+        generator.maximumSize = targetSize
+
+        do {
+            let cgImage = try await generator.image(at: .zero).image
+            let destURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("png")
+
+            let nsImage = NSImage(cgImage: cgImage, size: .zero)
+            guard let tiffData = nsImage.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                return nil
+            }
+
+            try pngData.write(to: destURL)
+            return destURL
+        } catch {
+            return nil
+        }
     }
 }
