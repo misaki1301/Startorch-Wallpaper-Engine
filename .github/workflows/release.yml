@@ -1,0 +1,62 @@
+name: Build & Distribute
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build release and distribute
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.5'
+
+      - name: Build Release
+        run: |
+          xcodebuild clean build \
+            -scheme "ikuyo-live-wallpaper" \
+            -project "StarTorch Wallpaper Engine.xcodeproj" \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty && exit ${PIPESTATUS[0]}
+
+      - name: Locate App
+        id: app
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "ikuyo-live-wallpaper.app" -path "*/Release/*" | head -1)
+          echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "Found app at: $APP_PATH"
+
+      - name: Create Archive
+        run: |
+          cd "$(dirname "${{ steps.app.outputs.path }}")"
+          ditto -c -k --sequesterRsrc --keepParent "$(basename "${{ steps.app.outputs.path }}")" ikuyo-live-wallpaper.zip
+          mv ikuyo-live-wallpaper.zip "$GITHUB_WORKSPACE/"
+          echo "ARCHIVE_PATH=$GITHUB_WORKSPACE/ikuyo-live-wallpaper.zip" >> "$GITHUB_ENV"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StarTorch-Wallpaper-Engine-${{ github.sha }}
+          path: ikuyo-live-wallpaper.zip
+          if-no-files-found: error
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ikuyo-live-wallpaper.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
