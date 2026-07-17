@@ -435,7 +435,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "StarTorch Wallpaper Engine";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -473,7 +473,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "StarTorch Wallpaper Engine";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -501,7 +501,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
+				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/StarTorch Wallpaper Engine.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StarTorch Wallpaper Engine";
 			};
 			name = Debug;
 		};
@@ -522,7 +522,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/ikuyo-live-wallpaper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ikuyo-live-wallpaper";
+				TEST_HOST = "$(BUILD_PRODUCTS_DIR)/StarTorch Wallpaper Engine.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StarTorch Wallpaper Engine";
 			};
 			name = Release;
 		};
