@@ -40,6 +40,10 @@ jobs:
           echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "Found app at: $APP_PATH"
 
+      - name: Sign App (ad-hoc)
+        run: |
+          codesign --force --deep --sign - "${{ steps.app.outputs.path }}"
+
       - name: Create Archive
         run: |
           cd "$(dirname "${{ steps.app.outputs.path }}")"
