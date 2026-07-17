@@ -1,4 +1,4 @@
-# ikuyo Live Wallpaper
+# StarTorch Wallpaper Engine
 
 A macOS live wallpaper app that plays video wallpapers behind your desktop icons. Built with SwiftUI and AppKit.
 
@@ -25,7 +25,7 @@ A macOS live wallpaper app that plays video wallpapers behind your desktop icons
 ## Installation
 
 1. Clone the repo
-2. Open `ikuyo-live-wallpaper.xcodeproj` in Xcode
+2. Open `startorch-wallpaper.xcodeproj` in Xcode
 3. Build and run (⌘R)
 
 The app runs as a regular window with a menu bar icon. Use the **Gallery** tab to browse wallpapers, or **My Files** to import your own.
@@ -45,7 +45,7 @@ The app runs as a regular window with a menu bar icon. Use the **Gallery** tab t
 ## Project Structure
 
 ```
-ikuyo-live-wallpaper/
+StarTorch-wallpaper/
 ├── Models/          # WallpaperItem, ImportedWallpaperStore
 ├── Services/        # WallpaperManager, CacheManager, VideoConverter, StatsService
 ├── Utils/           # MemoryResourceLoader (AVAssetResourceLoaderDelegate)
