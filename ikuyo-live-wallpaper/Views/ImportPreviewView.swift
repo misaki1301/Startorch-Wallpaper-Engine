@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 
+@MainActor
 struct ImportPreviewView: View {
     let sourceURL: URL
     let onComplete: (URL, String) -> Void
