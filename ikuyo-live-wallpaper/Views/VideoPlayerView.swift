@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 
+@MainActor
 struct VideoPlayerView: View {
     let player: AVPlayer
     let videoURL: URL
