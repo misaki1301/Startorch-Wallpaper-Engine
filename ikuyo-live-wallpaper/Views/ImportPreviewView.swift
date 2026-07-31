@@ -62,6 +62,10 @@ struct ImportPreviewView: View {
         }
         .frame(width: 500, height: 600)
         .onAppear(perform: {
+            let p = AVPlayer(url: sourceURL)
+            p.isMuted = true
+            p.play()
+            player = p
             Task {
                 try? await loadMetadata()
             }
@@ -76,15 +80,9 @@ struct ImportPreviewView: View {
     }
 
     private var videoPreview: some View {
-        VideoPlayer(player: player)
-            .frame(height: 220)
+        PlayerView(player: player)
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .onAppear {
-                let p = AVPlayer(url: sourceURL)
-                p.isMuted = true
-                p.play()
-                player = p
-            }
+            .frame(height: 220)
     }
 
     private var nameField: some View {
@@ -191,5 +189,20 @@ struct ImportPreviewView: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+}
+
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer?
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .inline
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        nsView.player = player
     }
 }
