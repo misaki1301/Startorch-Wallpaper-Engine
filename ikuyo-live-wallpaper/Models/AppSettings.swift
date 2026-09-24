@@ -13,6 +13,7 @@ final class AppSettings {
         static let pauseInLowPowerMode = "pauseInLowPowerMode"
         static let pauseOnBattery = "pauseOnBattery"
         static let pauseForFullScreenApps = "pauseForFullScreenApps"
+        static let hasCompletedOnboarding = "hasCompletedOnboarding"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -56,6 +57,12 @@ final class AppSettings {
         didSet { defaults.set(pauseForFullScreenApps, forKey: Key.pauseForFullScreenApps) }
     }
 
+    /// The first-run onboarding sheet has been shown (finished or skipped). "Show Welcome
+    /// Again" in Settings resets this.
+    var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
+    }
+
     /// The pause rules for `PlaybackPolicy`. Screen sleep and a locked screen always pause.
     var pauseRules: PauseRules {
         PauseRules(
@@ -77,6 +84,7 @@ final class AppSettings {
         pauseInLowPowerMode = defaults.object(forKey: Key.pauseInLowPowerMode) as? Bool ?? rules.inLowPowerMode
         pauseOnBattery = defaults.object(forKey: Key.pauseOnBattery) as? Bool ?? rules.onBattery
         pauseForFullScreenApps = defaults.object(forKey: Key.pauseForFullScreenApps) as? Bool ?? rules.forFullScreenApps
+        hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
     }
 
     /// `lastWallpaperURL`, unless it is a local file that no longer exists (e.g. it was trashed).

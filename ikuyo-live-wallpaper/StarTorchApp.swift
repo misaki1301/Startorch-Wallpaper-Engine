@@ -52,7 +52,7 @@ struct StarTorchApp: App {
         // A single window, so "Open StarTorch…" brings it back instead of stacking copies. The
         // system restores its frame; there's no forced size or splash on top of that.
         Window("StarTorch", id: MainWindow.id) {
-            ContentView()
+            AppRootView()
                 .environment(wallpaperManager)
                 .environment(cacheManager)
                 .environment(importedStore)

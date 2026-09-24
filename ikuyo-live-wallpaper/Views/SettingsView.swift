@@ -72,6 +72,10 @@ struct SettingsView: View {
             Toggle(isOn: $settings.resumeWallpaperOnLaunch) {
                 Text("Resume Wallpaper on Launch")
             }
+
+            Button("Show Welcome Again") {
+                settings.hasCompletedOnboarding = false
+            }
         }
     }
 
