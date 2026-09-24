@@ -162,7 +162,7 @@ final class WallpaperManager {
     }
 
     @objc private func screenParametersDidChange() {
-        guard isActive, let url = currentURL else { return }
+        guard isActive, currentURL != nil else { return }
 
         screenChangeTimer?.invalidate()
         screenChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
