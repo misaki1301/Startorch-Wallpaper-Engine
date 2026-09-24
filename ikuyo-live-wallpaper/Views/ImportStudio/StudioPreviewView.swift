@@ -21,7 +21,7 @@ struct StudioPreviewView: View {
                 : bounds
 
             ZStack(alignment: .topLeading) {
-                PlayerLayerView(player: player)
+                StudioPlayerLayerView(player: player)
 
                 if isEditingFocalPoint {
                     cropOutline(in: videoRect)
@@ -100,7 +100,7 @@ struct StudioPreviewView: View {
 
 /// A bare `AVPlayerLayer` (no controls; the studio has its own transport) that aspect-fits,
 /// so the preview geometry is predictable for the focal point overlay.
-private struct PlayerLayerView: NSViewRepresentable {
+private struct StudioPlayerLayerView: NSViewRepresentable {
     let player: AVPlayer
 
     func makeNSView(context: Context) -> PlayerLayerNSView {
