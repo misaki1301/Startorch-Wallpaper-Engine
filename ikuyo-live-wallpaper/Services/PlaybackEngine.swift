@@ -6,6 +6,8 @@ protocol WallpaperPlayback: AnyObject {
     /// Shared by every display's player layer.
     var player: AVPlayer { get }
     var isPlaying: Bool { get }
+    /// The playback rate while playing: 1 is normal speed, 0.5 the slowest "ambient" speed.
+    var rate: Float { get set }
     func play()
     func pause()
     /// Stops for good and releases the looper. The engine can't be restarted afterwards.
@@ -19,6 +21,15 @@ final class PlaybackEngine: WallpaperPlayback {
     private(set) var isPlaying = false
 
     var player: AVPlayer { queuePlayer }
+
+    var rate: Float = 1 {
+        didSet {
+            guard rate != oldValue else { return }
+            // `play()` starts at `defaultRate`; a running player changes speed right away.
+            queuePlayer.defaultRate = rate
+            if isPlaying { queuePlayer.rate = rate }
+        }
+    }
 
     init(url: URL) {
         // AVFoundation only buffers what it needs; AVPlayerLooper clones the template item into
@@ -34,7 +45,7 @@ final class PlaybackEngine: WallpaperPlayback {
 
     func play() {
         guard looper != nil else { return }
-        if queuePlayer.rate == 0 { queuePlayer.play() }
+        if queuePlayer.rate == 0 { queuePlayer.play() }  // at `defaultRate`
         isPlaying = true
     }
 

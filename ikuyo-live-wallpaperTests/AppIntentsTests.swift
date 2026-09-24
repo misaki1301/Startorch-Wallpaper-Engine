@@ -97,7 +97,7 @@ struct AppIntentsTests {
     }
 
     @Test func intentsThrowBeforeTheAppIsReady() async {
-        await withBridgedManager(manager: nil) {
+        _ = await withBridgedManager(manager: nil) {
             await #expect(throws: WallpaperIntentError.self) {
                 _ = try await PauseWallpaperIntent().perform()
             }

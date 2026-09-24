@@ -10,6 +10,7 @@ final class FakeEngine: WallpaperPlayback {
     let player = AVPlayer()
     private(set) var isPlaying = false
     private(set) var isTornDown = false
+    var rate: Float = 1
 
     init(url: URL) { self.url = url }
 
@@ -21,22 +22,63 @@ final class FakeEngine: WallpaperPlayback {
 /// Keeps track of what would be on screen, without windows or the desktop picture.
 @MainActor
 final class FakePresenter: WallpaperPresenting {
-    var windows: [NSWindow] = []
-    var onWindowsChange: (() -> Void)?
-    private(set) var presented: [URL] = []
+    var connectedDisplays = ["MAIN"]
+    var windowsByDisplay: [String: NSWindow] = [:]
+    var onDisplaysChange: (() -> Void)?
+    /// Every layout presented, as display → wallpaper.
+    private(set) var layouts: [[String: URL]] = []
+    /// The players of the last layout, by display.
+    private(set) var players: [String: AVPlayer] = [:]
+    /// The readability of the last layout, by display.
+    private(set) var readabilities: [String: ReadabilitySettings] = [:]
     private(set) var isShowing = false
     private(set) var restoreCount = 0
+    /// When set, completions wait for `finishTransitions()` instead of running at once, like a
+    /// crossfade or fade-out in progress.
+    var defersCompletions = false
+    private var pendingCompletions: [() -> Void] = []
 
-    func present(_ player: AVPlayer, for url: URL, playbackURL: URL) {
-        presented.append(url)
-        isShowing = true
+    /// The distinct wallpapers presented over time, in order.
+    var presented: [URL] {
+        var result: [URL] = []
+        for layout in layouts {
+            for url in Set(layout.values).sorted(by: { $0.absoluteString < $1.absoluteString }) where result.last != url {
+                result.append(url)
+            }
+        }
+        return result
     }
 
-    func dismiss() { isShowing = false }
+    var currentLayout: [String: URL] { layouts.last ?? [:] }
+
+    func present(_ layout: [String: PresentedWallpaper], completion: @escaping () -> Void) {
+        layouts.append(layout.mapValues(\.url))
+        players = layout.mapValues(\.player)
+        readabilities = layout.mapValues(\.readability)
+        isShowing = !layout.isEmpty
+        finish(completion)
+    }
+
+    func dismiss(animated: Bool, completion: @escaping () -> Void) {
+        isShowing = false
+        players = [:]
+        finish(completion)
+    }
+
     func restoreOriginalDesktops() { restoreCount += 1 }
 
+    func finishTransitions() {
+        let completions = pendingCompletions
+        pendingCompletions.removeAll()
+        for completion in completions { completion() }
+    }
+
+    private func finish(_ completion: @escaping () -> Void) {
+        if defersCompletions { pendingCompletions.append(completion) } else { completion() }
+    }
+
     /// What `WallpaperController` does after a display is plugged in or out.
-    func simulateScreenChange() { onWindowsChange?() }
+    func simulateScreenChange() { onDisplaysChange?() }
 }
 
 @MainActor
@@ -47,7 +89,7 @@ final class FakeSignals: PlaybackSignalSource {
     var onChange: ((PlaybackSignals) -> Void)?
     private(set) var monitoredWindowUpdates = 0
 
-    func monitorWallpaperWindows(_ windows: [NSWindow]) { monitoredWindowUpdates += 1 }
+    func monitorWallpaperWindows(_ windows: [String: NSWindow]) { monitoredWindowUpdates += 1 }
 }
 
 @MainActor
@@ -175,6 +217,7 @@ struct WallpaperManagerTests {
         #expect(!(engine?.isTornDown ?? true))
         #expect(presenter.presented == [video])
         #expect(signals.monitoredWindowUpdates == updatesBefore + 2, "new windows are watched for occlusion")
+        #expect(presenter.players["MAIN"] === engine?.player)
     }
 
     @Test func switchingWallpapersReplacesTheEngineWithoutRestoringTheDesktop() {
@@ -247,24 +290,24 @@ struct ScreenLayoutChangesTests {
     private let external = CGRect(x: 1512, y: 0, width: 2560, height: 1440)
 
     @Test func unchangedScreensNeedNoWork() {
-        let changes = ScreenLayoutChanges(windows: [1: builtIn, 2: external], screens: [1: builtIn, 2: external])
+        let changes = ScreenLayoutChanges(windows: ["1": builtIn, "2": external], screens: ["1": builtIn, "2": external])
         #expect(changes.isEmpty)
     }
 
     @Test func pluggingInADisplayOnlyAddsIt() {
-        let changes = ScreenLayoutChanges(windows: [1: builtIn], screens: [1: builtIn, 2: external])
-        #expect(changes == ScreenLayoutChanges(added: [2]))
+        let changes = ScreenLayoutChanges(windows: ["1": builtIn], screens: ["1": builtIn, "2": external])
+        #expect(changes == ScreenLayoutChanges(added: ["2"]))
     }
 
     @Test func unpluggingADisplayOnlyRemovesIt() {
-        let changes = ScreenLayoutChanges(windows: [1: builtIn, 2: external], screens: [1: builtIn])
-        #expect(changes == ScreenLayoutChanges(removed: [2]))
+        let changes = ScreenLayoutChanges(windows: ["1": builtIn, "2": external], screens: ["1": builtIn])
+        #expect(changes == ScreenLayoutChanges(removed: ["2"]))
     }
 
     @Test func aResolutionOrArrangementChangeResizesInPlace() {
         let moved = CGRect(x: -2560, y: 0, width: 2560, height: 1440)
-        let changes = ScreenLayoutChanges(windows: [1: builtIn, 2: external], screens: [1: builtIn, 2: moved])
-        #expect(changes == ScreenLayoutChanges(resized: [2]))
+        let changes = ScreenLayoutChanges(windows: ["1": builtIn, "2": external], screens: ["1": builtIn, "2": moved])
+        #expect(changes == ScreenLayoutChanges(resized: ["2"]))
     }
 }
 
