@@ -61,6 +61,7 @@ struct StarTorchApp: App {
             SettingsView()
                 .environment(cacheManager)
                 .environment(settings)
+                .environment(wallpaperManager)
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {

@@ -24,6 +24,7 @@ struct WallpaperCardView: View {
     @State private var failedThumbnail = false
     @State private var isHovering = false
     @State private var previewPlayer: AVPlayer?
+    @State private var energyScore: EnergyScore?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -50,6 +51,9 @@ struct WallpaperCardView: View {
         .task(id: item.url) {
             await loadThumbnail()
         }
+        .task(id: item.id) {
+            energyScore = await EnergyScoreResolver.shared.score(for: item)
+        }
     }
 
     private var accessibilityLabel: String {
@@ -59,6 +63,7 @@ struct WallpaperCardView: View {
         if case .completed = downloadState ?? .notStarted, !hideDownloadBadge {
             parts.append(String(localized: "Available Offline", defaultValue: "Available offline"))
         }
+        if let energyScore { parts.append(energyScore.label) }
         return parts.joined(separator: ", ")
     }
 
@@ -115,6 +120,9 @@ struct WallpaperCardView: View {
     @ViewBuilder
     private var statusBadges: some View {
         HStack(spacing: 4) {
+            if let energyScore {
+                EnergyBadgeView(score: energyScore)
+            }
             downloadBadge
             if let trailingBadge {
                 trailingBadge()

@@ -23,6 +23,17 @@ struct Catalog: Codable, Equatable {
     static let empty = Catalog(version: 1, wallpapers: [])
 
     var items: [WallpaperItem] {
-        wallpapers.map { WallpaperItem(url: $0.url, name: $0.title, creator: $0.creator, license: $0.license) }
+        wallpapers.map {
+            WallpaperItem(
+                url: $0.url,
+                name: $0.title,
+                creator: $0.creator,
+                license: $0.license,
+                width: $0.width,
+                height: $0.height,
+                fps: $0.fps,
+                bitrate: $0.bitrate
+            )
+        }
     }
 }

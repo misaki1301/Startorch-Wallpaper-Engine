@@ -7,12 +7,15 @@ struct SettingsView: View {
     @State private var cacheSize: UInt64 = 0
     @Environment(WallpaperCacheManager.self) private var cacheManager
     @Environment(AppSettings.self) private var settings
+    @Environment(WallpaperManager.self) private var manager
     @State private var launchAtLogin = LaunchAtLogin()
+    @State private var isShowingEnergySummary = false
 
     var body: some View {
         Form {
             generalSection
             whenToPauseSection
+            energySection
             storageSection
         }
         .formStyle(.grouped)
@@ -24,6 +27,9 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // The user may have changed Login Items in System Settings meanwhile.
             launchAtLogin.refresh()
+        }
+        .sheet(isPresented: $isShowingEnergySummary) {
+            EnergyWeeklySummaryView(days: manager.stats.recentDays())
         }
     }
 
@@ -85,6 +91,14 @@ struct SettingsView: View {
         }
     }
 
+    private var energySection: some View {
+        Section("Energy") {
+            Button("View Weekly Summary…") {
+                isShowingEnergySummary = true
+            }
+        }
+    }
+
     private var storageSection: some View {
         Section("Storage") {
             LabeledContent("Cached Wallpapers") {
@@ -132,4 +146,5 @@ enum AboutPanel {
     SettingsView()
         .environment(WallpaperCacheManager())
         .environment(AppSettings())
+        .environment(WallpaperManager())
 }
