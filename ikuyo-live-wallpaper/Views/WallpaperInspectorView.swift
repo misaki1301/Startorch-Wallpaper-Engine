@@ -47,6 +47,12 @@ struct WallpaperInspectorView: View {
             }
             .padding()
         }
+        .onChange(of: readability.wrappedValue.speed) { _, speed in
+            previewPlayer?.defaultRate = Float(speed)
+            if previewPlayer?.rate != 0 { previewPlayer?.rate = Float(speed) }
+        }
+        .onChange(of: item.url) { _, _ in stopPreview() }
+        .onDisappear { stopPreview() }
         .task(id: item.url) {
             poster = nil
             posterImage = nil
@@ -55,25 +61,14 @@ struct WallpaperInspectorView: View {
         }
     }
 
-    @ViewBuilder
+    /// The wallpaper on a miniature desktop, with this wallpaper's readability settings.
     private var preview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.fill.quaternary)
-                .aspectRatio(16 / 10, contentMode: .fit)
-
-            if isPreviewing, let previewPlayer {
-                VideoPlayer(player: previewPlayer)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else if let poster {
-                Image(nsImage: poster)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else {
-                ProgressView()
-            }
-        }
+        DesktopPreview(
+            poster: poster,
+            player: isPreviewing ? previewPlayer : nil,
+            readability: readability.wrappedValue,
+            usesDarkMenuBarText: contrast?.usesDarkText ?? false
+        )
         .overlay(alignment: .bottomTrailing) {
             Button(isPreviewing ? "Stop Preview" : "Play Preview", systemImage: isPreviewing ? "stop.fill" : "play.fill") {
                 togglePreview()
@@ -148,16 +143,24 @@ struct WallpaperInspectorView: View {
 
     private func togglePreview() {
         guard !reduceMotion else { return }
-        isPreviewing.toggle()
         if isPreviewing {
-            let player = AVPlayer(url: item.url)
-            player.isMuted = true
-            previewPlayer = player
-            player.play()
+            stopPreview()
         } else {
-            previewPlayer?.pause()
-            previewPlayer = nil
+            let player = AVPlayer(url: WallpaperCacheManager.resolvedURL(for: item.url))
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            // At the wallpaper's ambient speed, like on the desktop.
+            player.defaultRate = Float(readability.wrappedValue.speed)
+            previewPlayer = player
+            isPreviewing = true
+            player.play()
         }
+    }
+
+    private func stopPreview() {
+        isPreviewing = false
+        previewPlayer?.pause()
+        previewPlayer = nil
     }
 
     private func loadPoster() async {
