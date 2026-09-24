@@ -13,6 +13,8 @@ struct ImportPreviewView: View {
     @State private var isConverting = false
     @State private var conversionProgress: Double = 0
     @State private var conversionError: String?
+    @State private var conversionTask: Task<Void, Never>?
+    @State private var isDismissed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,6 +43,8 @@ struct ImportPreviewView: View {
                     Text("Converting to HEVC…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    Button("Cancel", role: .cancel) { cancelConversion() }
+                        .keyboardShortcut(.escape)
                 }
                 .padding()
                 Spacer()
@@ -62,15 +66,16 @@ struct ImportPreviewView: View {
         }
         .frame(width: 500, height: 600)
         .onAppear(perform: {
-            let p = AVPlayer(url: sourceURL)
-            p.isMuted = true
-            p.play()
-            player = p
+            startPreview()
             Task {
                 try? await loadMetadata()
             }
         })
-        .onDisappear { player?.pause() }
+        .onDisappear {
+            isDismissed = true
+            player?.pause()
+            conversionTask?.cancel()
+        }
     }
 
     private var header: some View {
@@ -161,28 +166,41 @@ struct ImportPreviewView: View {
         metadata = try? await VideoConverter.metadata(for: sourceURL)
     }
 
+    private func startPreview() {
+        let p = AVPlayer(url: sourceURL)
+        p.isMuted = true
+        p.play()
+        player = p
+    }
+
     private func startConversion() {
         player?.pause()
         player = nil
+        conversionProgress = 0
         isConverting = true
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mp4")
 
-        Task {
+        conversionTask = Task {
             do {
                 try await VideoConverter.transcodeToHEVC(source: sourceURL, output: outputURL) { pct in
                     conversionProgress = pct
                 }
-                await MainActor.run {
-                    onComplete(outputURL, wallpaperName.trimmingCharacters(in: .whitespaces))
-                }
+                onComplete(outputURL, wallpaperName.trimmingCharacters(in: .whitespaces))
+            } catch is CancellationError {
+                // The converter already removed the partial output; go back to the form.
+                isConverting = false
+                if !isDismissed { startPreview() }
             } catch {
-                await MainActor.run {
-                    conversionError = error.localizedDescription
-                }
+                conversionError = error.localizedDescription
             }
+            conversionTask = nil
         }
+    }
+
+    private func cancelConversion() {
+        conversionTask?.cancel()
     }
 
     private func formatBytes(_ bytes: UInt64) -> String {

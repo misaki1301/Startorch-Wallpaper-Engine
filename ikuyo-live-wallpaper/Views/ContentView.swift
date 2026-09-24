@@ -39,9 +39,19 @@ struct ContentView: View {
         } detail: {
             Text("Select an item")
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                PlaybackControls()
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
+        .environment(WallpaperManager())
+        .environment(AppSettings())
+        .environment(WallpaperLibrary())
+        .environment(WallpaperCacheManager())
+        .environment(ImportedWallpaperStore())
 }
