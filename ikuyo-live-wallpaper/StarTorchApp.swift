@@ -65,82 +65,15 @@ struct StarTorchApp: App {
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
-            MenuBarContent(stats: statsService)
+            MenuBarPanelView(stats: statsService)
                 .environment(wallpaperManager)
                 .environment(settings)
+                .environment(library)
         }
+        .menuBarExtraStyle(.window)
     }
 }
 
 enum MainWindow {
     static let id = "main"
-}
-
-struct MenuBarContent: View {
-    let stats: SystemStatsService
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
-    @Environment(WallpaperManager.self) private var manager
-
-    var body: some View {
-        StatsMenuView(stats: stats)
-
-        Divider()
-
-        PlaybackControls()
-        // Explain automatic pauses; a pause by the user already shows as "Resume".
-        if let reason = manager.pauseReason, reason != .user {
-            Text("Paused: \(reason.label)")
-        }
-
-        Divider()
-
-        Button("Open StarTorch…") {
-            NSApplication.shared.activate()
-            openWindow(id: MainWindow.id)
-        }
-        Button("Settings…") {
-            NSApplication.shared.activate()
-            openSettings()
-        }
-        .keyboardShortcut(",")
-
-        Divider()
-
-        Button("Quit") {
-            NSApplication.shared.terminate(nil)
-        }
-        .keyboardShortcut("q")
-    }
-}
-
-struct StatsMenuView: View {
-    @ObservedObject var stats: SystemStatsService
-
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text("CPU:")
-                    .foregroundStyle(.secondary)
-                Text(String(format: "%.1f%%", stats.cpuUsage))
-                    .monospacedDigit()
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-
-            HStack {
-                Text("RAM:")
-                    .foregroundStyle(.secondary)
-                Text("\(stats.memoryUsedFormatted) / \(stats.memoryTotalFormatted)")
-                    .monospacedDigit()
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-        }
-        .padding(.vertical, 4)
-        // The menu bar extra's content view stays alive even while the menu is closed, so without
-        // this the 2-second poll would run for the app's entire lifetime for no reason.
-        .onAppear { stats.start() }
-        .onDisappear { stats.stop() }
-    }
 }
