@@ -12,13 +12,15 @@ final class WallpaperManager {
     @ObservationIgnored private var screenChangeTimer: Timer?
     @ObservationIgnored private var frameTask: Task<Void, Never>?
     @ObservationIgnored private let restorer: DesktopRestorer
+    @ObservationIgnored private let settings: AppSettings?
 
     private(set) var isActive = false
     private(set) var isPaused = false
     private(set) var currentURL: URL?
 
-    init(restorer: DesktopRestorer = DesktopRestorer()) {
+    init(restorer: DesktopRestorer = DesktopRestorer(), settings: AppSettings? = nil) {
         self.restorer = restorer
+        self.settings = settings
 
         NotificationCenter.default.addObserver(
             self,
@@ -92,6 +94,7 @@ final class WallpaperManager {
         currentURL = url
         isActive = true
         isPaused = false
+        settings?.lastWallpaperURL = url
 
         showStaticFrame(of: playbackURL, for: url)
     }
@@ -106,6 +109,15 @@ final class WallpaperManager {
     func resume() {
         player?.play()
         isPaused = false
+    }
+
+    /// Resumes a paused wallpaper, or starts `lastURL` when nothing is playing.
+    func play(orStart lastURL: URL?) {
+        if isActive {
+            resume()
+        } else if let lastURL {
+            start(with: lastURL)
+        }
     }
 
     /// Stops playback and gives every display its original desktop picture back.

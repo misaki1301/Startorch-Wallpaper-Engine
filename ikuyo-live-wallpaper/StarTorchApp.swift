@@ -16,7 +16,7 @@ struct StarTorchApp: App {
         let cacheManager = WallpaperCacheManager()
         // A test run must never read or change the real desktop picture.
         let desktop: any DesktopImageSetting = AppEnvironment.isHostingTests ? InertDesktop() : SystemDesktop()
-        let wallpaperManager = WallpaperManager(restorer: DesktopRestorer(desktop: desktop))
+        let wallpaperManager = WallpaperManager(restorer: DesktopRestorer(desktop: desktop), settings: settings)
         _wallpaperManager = State(initialValue: wallpaperManager)
         _settings = State(initialValue: settings)
         _cacheManager = State(initialValue: cacheManager)
@@ -35,15 +35,11 @@ struct StarTorchApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        // A single window, so "Open StarTorch…" brings it back instead of stacking copies.
+        Window("StarTorch", id: MainWindow.id) {
             ZStack {
                 if showSplash {
                     SplashAnimationView()
-                        .environment(wallpaperManager)
-                        .environment(cacheManager)
-                        .environment(importedStore)
-                        .environment(settings)
-                        .environment(library)
                         .onAppear {
                             statsService.start()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -54,53 +50,68 @@ struct StarTorchApp: App {
                         }
                 } else {
                     ContentView()
-                        .environment(wallpaperManager)
-                        .environment(cacheManager)
-                        .environment(importedStore)
-                        .environment(settings)
-                        .environment(library)
                 }
             }
+            .environment(wallpaperManager)
+            .environment(cacheManager)
+            .environment(importedStore)
+            .environment(settings)
+            .environment(library)
         }
         .defaultSize(width: 900, height: 600)
 
+        Settings {
+            ConfigurationView()
+                .frame(width: 440, height: 560)
+                .environment(cacheManager)
+                .environment(settings)
+        }
+
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
-            StatsMenuView(stats: statsService)
-
-            Divider()
-
-            Button(wallpaperManager.isActive ? "Stop Wallpaper" : "Start Wallpaper") {
-                if wallpaperManager.isActive {
-                    wallpaperManager.stop()
-                } else {
-                    let url = settings.lastWallpaperURL
-                        ?? Bundle.main.url(forResource: "test", withExtension: "mp4")
-                        ?? URL(string: "about:blank")!
-                    wallpaperManager.start(with: url)
-                }
-            }
-            if wallpaperManager.isActive {
-                if wallpaperManager.isPaused {
-                    Button("Resume") {
-                        wallpaperManager.resume()
-                    }
-                } else {
-                    Button("Pause") {
-                        wallpaperManager.pause()
-                    }
-                }
-            }
-
-            Divider()
-
-            Button("Quit") {
-                wallpaperManager.stop()
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+            MenuBarContent(stats: statsService)
+                .environment(wallpaperManager)
+                .environment(settings)
         }
     }
 }
+
+enum MainWindow {
+    static let id = "main"
+}
+
+struct MenuBarContent: View {
+    let stats: SystemStatsService
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        StatsMenuView(stats: stats)
+
+        Divider()
+
+        PlaybackControls()
+
+        Divider()
+
+        Button("Open StarTorch…") {
+            NSApplication.shared.activate()
+            openWindow(id: MainWindow.id)
+        }
+        Button("Settings…") {
+            NSApplication.shared.activate()
+            openSettings()
+        }
+        .keyboardShortcut(",")
+
+        Divider()
+
+        Button("Quit") {
+            NSApplication.shared.terminate(nil)
+        }
+        .keyboardShortcut("q")
+    }
+}
+
 struct StatsMenuView: View {
     @ObservedObject var stats: SystemStatsService
 
