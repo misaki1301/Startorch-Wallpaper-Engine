@@ -14,6 +14,7 @@ final class AppSettings {
         static let pauseOnBattery = "pauseOnBattery"
         static let pauseForFullScreenApps = "pauseForFullScreenApps"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let schedule = "schedule"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -63,6 +64,18 @@ final class AppSettings {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
 
+    // MARK: Schedule
+
+    /// The time-of-day slots and Light/Dark appearance variants, read and written by
+    /// `ScheduleService`. Stored as one JSON blob rather than separate keys, since it's a single
+    /// nested value with no reason to read or write it piecemeal.
+    var schedule: Schedule {
+        didSet {
+            guard let data = try? JSONEncoder().encode(schedule) else { return }
+            defaults.set(data, forKey: Key.schedule)
+        }
+    }
+
     /// The pause rules for `PlaybackPolicy`. Screen sleep and a locked screen always pause.
     var pauseRules: PauseRules {
         PauseRules(
@@ -85,6 +98,12 @@ final class AppSettings {
         pauseOnBattery = defaults.object(forKey: Key.pauseOnBattery) as? Bool ?? rules.onBattery
         pauseForFullScreenApps = defaults.object(forKey: Key.pauseForFullScreenApps) as? Bool ?? rules.forFullScreenApps
         hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
+        if let data = defaults.data(forKey: Key.schedule),
+           let decoded = try? JSONDecoder().decode(Schedule.self, from: data) {
+            schedule = decoded
+        } else {
+            schedule = Schedule()
+        }
     }
 
     /// `lastWallpaperURL`, unless it is a local file that no longer exists (e.g. it was trashed).

@@ -9,6 +9,7 @@ struct StarTorchApp: App {
     @State private var library: WallpaperLibrary
     @State private var importedStore: ImportedWallpaperStore
     @State private var settings: AppSettings
+    @State private var scheduleService: ScheduleService
     private let statsService = SystemStatsService()
 
     init() {
@@ -24,6 +25,14 @@ struct StarTorchApp: App {
         _library = State(initialValue: library)
         let importedStore = ImportedWallpaperStore()
         _importedStore = State(initialValue: importedStore)
+        // A test run must never touch the desktop appearance/wake/clock notification centers.
+        let scheduleService = ScheduleService(
+            manager: wallpaperManager,
+            library: library,
+            settings: settings,
+            observeSystemEvents: !AppEnvironment.isHostingTests
+        )
+        _scheduleService = State(initialValue: scheduleService)
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
@@ -58,6 +67,7 @@ struct StarTorchApp: App {
                 .environment(importedStore)
                 .environment(settings)
                 .environment(library)
+                .environment(scheduleService)
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -73,6 +83,9 @@ struct StarTorchApp: App {
                 .environment(cacheManager)
                 .environment(settings)
                 .environment(wallpaperManager)
+                .environment(library)
+                .environment(importedStore)
+                .environment(scheduleService)
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
