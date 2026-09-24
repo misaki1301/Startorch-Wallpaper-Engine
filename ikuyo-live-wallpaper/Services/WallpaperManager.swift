@@ -52,6 +52,18 @@ final class WallpaperManager {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applicationWillTerminate() }
         }
+        followPauseRules()
+    }
+
+    /// Keeps `policy` in step with the "When to Pause" settings, so a toggle applies at once.
+    private func followPauseRules() {
+        guard let settings else { return }
+        policy.rules = withObservationTracking {
+            settings.pauseRules
+        } onChange: { [weak self] in
+            // Called before the new value is stored; read it on the next turn.
+            Task { @MainActor in self?.followPauseRules() }
+        }
     }
 
     /// Puts back desktop pictures left behind by a previous run that crashed or was killed.
