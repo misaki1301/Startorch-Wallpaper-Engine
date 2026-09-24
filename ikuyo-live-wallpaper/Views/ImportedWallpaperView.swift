@@ -11,7 +11,10 @@ struct ImportedWallpaperView: View {
     @Environment(WallpaperManager.self) private var manager
     @Environment(WallpaperCacheManager.self) private var cacheManager
     @Environment(WallpaperLibrary.self) private var library
+    @Environment(\.undoManager) private var undoManager
     @State private var importSource: ImportSource?
+    @State private var hoveredItemID: WallpaperItem.ID?
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,6 +47,15 @@ struct ImportedWallpaperView: View {
             }
         }
         .navigationTitle("My Files")
+        .alert(
+            "Couldn't Move to Trash",
+            isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }),
+            presenting: deleteError
+        ) { _ in
+            Button("OK") {}
+        } message: { message in
+            Text(message)
+        }
         .sheet(item: $importSource) { source in
             ImportPreviewView(
                 sourceURL: source.url,
@@ -93,7 +105,17 @@ struct ImportedWallpaperView: View {
         .overlay(alignment: .bottomTrailing) {
             HStack(spacing: 4) {
                 fileSizeBadge(for: item.url)
-                deleteButton(for: item)
+                // Only on hover, so a stray click can't delete anything.
+                if hoveredItemID == item.id {
+                    deleteButton(for: item)
+                }
+            }
+        }
+        .onHover { isHovering in
+            if isHovering {
+                hoveredItemID = item.id
+            } else if hoveredItemID == item.id {
+                hoveredItemID = nil
             }
         }
         .onTapGesture {
@@ -107,7 +129,7 @@ struct ImportedWallpaperView: View {
                 library.toggleFavorite(item.url)
             }
             Divider()
-            Button("Delete", role: .destructive) { deleteItem(item) }
+            Button("Move to Trash", role: .destructive) { deleteItem(item) }
         }
     }
 
@@ -126,21 +148,27 @@ struct ImportedWallpaperView: View {
     }
 
     private func deleteButton(for item: WallpaperItem) -> some View {
-        Button("Delete", systemImage: "trash") {
+        Button("Move to Trash", systemImage: "trash") {
             deleteItem(item)
         }
         .labelStyle(.iconOnly)
-        .foregroundStyle(.red)
+        .foregroundStyle(.white)
         .shadow(radius: 2)
         .padding(6)
+        .help("Move to Trash")
     }
 
+    /// Moves the file to the Trash (restorable with Undo or from Finder). Favorites are left
+    /// alone so an undo brings the item back exactly as it was.
     private func deleteItem(_ item: WallpaperItem) {
-        library.setFavorite(false, for: item.url)
         if manager.currentURL == item.url {
             manager.stop()
         }
-        store.delete(item.url)
+        do {
+            try store.moveToTrash(item.url, undoManager: undoManager)
+        } catch {
+            deleteError = error.localizedDescription
+        }
     }
 
     private func formatBytes(_ bytes: UInt64) -> String {
