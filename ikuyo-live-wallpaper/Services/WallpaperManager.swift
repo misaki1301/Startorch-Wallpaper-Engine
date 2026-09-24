@@ -95,6 +95,7 @@ final class WallpaperManager {
         isActive = true
         isPaused = false
         settings?.lastWallpaperURL = url
+        settings?.wallpaperWasActive = true
 
         showStaticFrame(of: playbackURL, for: url)
     }
@@ -124,10 +125,13 @@ final class WallpaperManager {
     func stop() {
         tearDown()
         restorer.restoreOriginalDesktops()
+        settings?.wallpaperWasActive = false
     }
 
+    /// Restores the desktop but remembers the wallpaper was playing, so it resumes on next launch.
     @objc private func applicationWillTerminate() {
-        stop()
+        tearDown()
+        restorer.restoreOriginalDesktops()
     }
 
     /// Removes the player and windows but leaves the desktop picture alone, so switching
