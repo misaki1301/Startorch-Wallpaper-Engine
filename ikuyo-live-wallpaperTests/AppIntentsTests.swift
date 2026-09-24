@@ -63,7 +63,7 @@ struct AppIntentsTests {
     @Test func setWallpaperIntentStartsTheGivenWallpaper() async throws {
         let manager = makeManager()
         try await withBridgedManager(manager: manager) {
-            var intent = SetWallpaperIntent()
+            let intent = SetWallpaperIntent()
             intent.wallpaper = WallpaperEntity(item: WallpaperItem(url: video, name: "Rain"))
             _ = try await intent.perform()
             #expect(manager.currentURL == video)
@@ -96,7 +96,7 @@ struct AppIntentsTests {
     }
 
     @Test func intentsThrowBeforeTheAppIsReady() async {
-        await withBridgedManager(manager: nil) {
+        _ = await withBridgedManager(manager: nil) {
             await #expect(throws: WallpaperIntentError.self) {
                 _ = try await PauseWallpaperIntent().perform()
             }

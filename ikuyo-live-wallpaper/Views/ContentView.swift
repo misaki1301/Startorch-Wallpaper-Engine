@@ -28,6 +28,8 @@ struct ContentView: View {
             base = library.favoriteCatalogItems
         case .myFiles:
             base = importedStore.items
+        case .displays:
+            base = []
         }
         return WallpaperSearch.filter(base, query: searchText)
     }
@@ -106,6 +108,10 @@ struct ContentView: View {
                 Label(SidebarItem.myFiles.title, systemImage: SidebarItem.myFiles.systemImage)
                     .tag(SidebarItem.myFiles)
             }
+            Section("Desktop") {
+                Label(SidebarItem.displays.title, systemImage: SidebarItem.displays.systemImage)
+                    .tag(SidebarItem.displays)
+            }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
     }
@@ -123,6 +129,9 @@ struct ContentView: View {
             grid(emptyTitle: "No Imported Videos", emptyImage: "video.badge.plus", emptyDescription: "Import video files from your Mac to use as wallpapers.")
                 .navigationTitle(SidebarItem.myFiles.title)
                 .navigationSubtitle(Text("^[\(importedStore.items.count) file](inflect: true)"))
+        case .displays:
+            DisplaysView()
+                .navigationTitle(SidebarItem.displays.title)
         }
     }
 
@@ -130,7 +139,7 @@ struct ContentView: View {
         WallpaperGridView(
             items: currentItems,
             selection: $selectedItemID,
-            isActive: { manager.isActive && manager.currentURL == $0.url },
+            isActive: { manager.isShowing($0.url) },
             isFavorite: { library.isFavorite($0.url) },
             downloadState: { cacheManager.states[$0.url] },
             hideDownloadBadge: sidebarSelection == .myFiles,
@@ -181,9 +190,8 @@ struct ContentView: View {
     }
 
     private func deleteImported(_ item: WallpaperItem) {
-        if manager.currentURL == item.url {
-            manager.stop()
-        }
+        // Also forgets it on displays that aren't connected right now.
+        manager.remove(item.url)
         do {
             try importedStore.moveToTrash(item.url, undoManager: undoManager)
         } catch {

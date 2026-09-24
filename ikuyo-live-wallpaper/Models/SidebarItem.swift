@@ -6,6 +6,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
     case gallery
     case favorites
     case myFiles
+    case displays
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
         case .gallery: return String(localized: "sidebar.gallery", defaultValue: "Gallery")
         case .favorites: return String(localized: "sidebar.favorites", defaultValue: "Favorites")
         case .myFiles: return String(localized: "sidebar.myFiles", defaultValue: "My Files")
+        case .displays: return String(localized: "sidebar.displays", defaultValue: "Displays")
         }
     }
 
@@ -22,6 +24,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
         case .gallery: return "square.grid.2x2"
         case .favorites: return "heart"
         case .myFiles: return "folder"
+        case .displays: return "display.2"
         }
     }
 }
