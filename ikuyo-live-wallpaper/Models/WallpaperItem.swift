@@ -13,6 +13,11 @@ struct WallpaperItem: Identifiable, Hashable {
     var height: Int?
     var fps: Double?
     var bitrate: Int?
+    /// Import studio: a still chosen by the user, used instead of a frame grabbed from the
+    /// video for thumbnails. Only imported wallpapers have one.
+    var posterURL: URL?
+    /// Import studio: what to keep on screen when the video is aspect-filled. `nil` = center.
+    var focalPoint: FocalPoint?
 
     init(
         url: URL,
@@ -22,7 +27,9 @@ struct WallpaperItem: Identifiable, Hashable {
         width: Int? = nil,
         height: Int? = nil,
         fps: Double? = nil,
-        bitrate: Int? = nil
+        bitrate: Int? = nil,
+        posterURL: URL? = nil,
+        focalPoint: FocalPoint? = nil
     ) {
         self.id = url.absoluteString
         self.url = url
@@ -36,5 +43,7 @@ struct WallpaperItem: Identifiable, Hashable {
         self.height = height
         self.fps = fps
         self.bitrate = bitrate
+        self.posterURL = posterURL
+        self.focalPoint = focalPoint
     }
 }

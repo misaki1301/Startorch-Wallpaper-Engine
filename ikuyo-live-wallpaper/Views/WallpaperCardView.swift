@@ -193,6 +193,11 @@ struct WallpaperCardView: View {
     }
 
     private func loadThumbnail() async {
+        // A poster picked in the import studio wins over a grabbed frame.
+        if let posterURL = item.posterURL, let poster = NSImage(contentsOf: posterURL) {
+            thumbnail = poster
+            return
+        }
         let asset = AVAsset(url: item.url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
