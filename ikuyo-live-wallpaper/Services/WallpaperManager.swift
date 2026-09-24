@@ -11,7 +11,6 @@ final class WallpaperManager {
     private var isStopping = false
     private var playbackURL: URL?
     private var playerLooper: AVPlayerLooper?
-    private var memoryLoader: MemoryResourceLoader?
 
     private(set) var isActive = false
     private(set) var isPaused = false
@@ -38,21 +37,13 @@ final class WallpaperManager {
             }
         }
 
-        // AVPlayerLooper for seamless gapless looping
-        let playerItem: AVPlayerItem
-        if playbackURL.isFileURL, let data = try? Data(contentsOf: playbackURL) {
-            let loader = MemoryResourceLoader(data: data, fileExtension: playbackURL.pathExtension)
-            memoryLoader = loader
-            let asset = AVURLAsset(url: URL(string: "memory://wallpaper")!)
-            asset.resourceLoader.setDelegate(loader, queue: .main)
-            playerItem = AVPlayerItem(asset: asset)
-        } else {
-            playerItem = AVPlayerItem(url: playbackURL)
-        }
-        playerItem.preferredForwardBufferDuration = 0
-        let queuePlayer = AVQueuePlayer(playerItem: playerItem)
+        // Stream straight from disk (or the network); AVFoundation only buffers what it needs.
+        // AVPlayerLooper clones the template item into the queue for gapless looping.
+        let templateItem = AVPlayerItem(url: playbackURL)
+        templateItem.preferredForwardBufferDuration = 0
+        let queuePlayer = AVQueuePlayer()
         queuePlayer.isMuted = true
-        self.playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: playerItem)
+        self.playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: templateItem)
         queuePlayer.play()
         self.player = queuePlayer
         currentURL = url
@@ -128,7 +119,6 @@ final class WallpaperManager {
         player?.pause()
         playerLooper?.disableLooping()
         playerLooper = nil
-        memoryLoader = nil
         player = nil
         playbackURL = nil
 
