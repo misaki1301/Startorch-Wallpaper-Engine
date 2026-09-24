@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import os
 
 enum DownloadState: Equatable {
     case notStarted
@@ -11,20 +13,51 @@ enum DownloadState: Equatable {
 @Observable
 final class WallpaperCacheManager {
     private(set) var states: [URL: DownloadState] = [:]
-    private var tasks: [URL: Task<Void, Never>] = [:]
+    @ObservationIgnored private var tasks: [URL: Task<Void, Never>] = [:]
+    @ObservationIgnored private let directory: URL
+    @ObservationIgnored private let session: URLSession
 
-    private var cacheDirectory: URL {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appending(path: "WallpaperCache", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+    /// `Caches/WallpaperCache`, created on first use.
+    nonisolated static let defaultDirectory = URL.cachesDirectory.appending(path: "WallpaperCache", directoryHint: .isDirectory)
+
+    init(directory: URL = WallpaperCacheManager.defaultDirectory, session: URLSession = .shared) {
+        self.directory = directory
+        self.session = session
+        Self.migrateLegacyFilenames(in: directory)
+    }
+
+    // MARK: - Paths
+
+    /// A fixed-length, filesystem-safe name for `url`: the SHA-256 of the URL plus its extension.
+    /// Long URLs used to be hex-encoded in full, which overflowed the 255-byte filename limit.
+    nonisolated static func cacheKey(for url: URL) -> String {
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let ext = url.pathExtension.lowercased()
+        return "\(hex).\(ext.isEmpty || ext.count > 8 ? "mp4" : ext)"
+    }
+
+    nonisolated static func localURL(for url: URL, in directory: URL = defaultDirectory) -> URL {
+        directory.appending(path: cacheKey(for: url))
+    }
+
+    /// The cached file for `url` if it has been downloaded, otherwise `url` itself.
+    nonisolated static func resolvedURL(for url: URL, in directory: URL = defaultDirectory) -> URL {
+        let local = localURL(for: url, in: directory)
+        return FileManager.default.fileExists(atPath: local.path(percentEncoded: false)) ? local : url
     }
 
     func cachedURL(for url: URL) -> URL? {
-        let local = localURL(for: url)
+        let local = Self.localURL(for: url, in: directory)
         guard FileManager.default.fileExists(atPath: local.path(percentEncoded: false)) else { return nil }
         return local
     }
+
+    private func ensureDirectory() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    // MARK: - Downloads
 
     func startDownload(_ url: URL) {
         guard tasks[url] == nil else { return }
@@ -35,70 +68,67 @@ final class WallpaperCacheManager {
         }
 
         states[url] = .downloading(progress: 0)
+        let local = Self.localURL(for: url, in: directory)
+        let session = session
 
         tasks[url] = Task { [weak self] in
-            defer { self?.tasks[url] = nil }
+            let reporter = DownloadProgressReporter { fraction in
+                Task { @MainActor in self?.updateProgress(fraction, for: url) }
+            }
             do {
-                let local = self?.localURL(for: url) ?? Self.defaultLocalURL(for: url)
+                try self?.ensureDirectory()
+                let (tempURL, response) = try await session.download(from: url, delegate: reporter)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    try? FileManager.default.removeItem(at: tempURL)
+                    throw URLError(.badServerResponse)
+                }
                 if FileManager.default.fileExists(atPath: local.path(percentEncoded: false)) {
                     try FileManager.default.removeItem(at: local)
                 }
-
-                let (tempURL, _) = try await URLSession.shared.download(from: url)
                 try FileManager.default.moveItem(at: tempURL, to: local)
-
-                self?.states[url] = .completed(localURL: local)
+                self?.finishDownload(url, state: .completed(localURL: local))
             } catch {
-                self?.states[url] = .failed
+                self?.finishDownload(url, state: Task.isCancelled ? .notStarted : .failed)
             }
         }
     }
 
+    private func updateProgress(_ fraction: Double, for url: URL) {
+        // Late updates must not overwrite a finished or cancelled download.
+        guard case .downloading = states[url] else { return }
+        states[url] = .downloading(progress: fraction)
+    }
+
+    private func finishDownload(_ url: URL, state: DownloadState) {
+        tasks[url] = nil
+        // `removeCache` already reset the state of a cancelled download.
+        if case .downloading = states[url] {
+            states[url] = state
+        }
+    }
+
+    // MARK: - Maintenance
+
     func removeCache(for url: URL) {
         tasks[url]?.cancel()
         tasks[url] = nil
-        let local = localURL(for: url)
-        try? FileManager.default.removeItem(at: local)
+        try? FileManager.default.removeItem(at: Self.localURL(for: url, in: directory))
         states[url] = .notStarted
-    }
-
-    private func localURL(for url: URL) -> URL {
-        Self.defaultLocalURL(for: url)
-    }
-
-    static func resolvedURL(for url: URL) -> URL {
-        let local = defaultLocalURL(for: url)
-        if FileManager.default.fileExists(atPath: local.path(percentEncoded: false)) {
-            return local
-        }
-        return url
-    }
-
-    static var cacheDirectoryURL: URL {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appending(path: "WallpaperCache", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
     }
 
     func cacheSize() -> UInt64 {
         let fm = FileManager.default
-        let dir = Self.cacheDirectoryURL
-        guard let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        guard let enumerator = fm.enumerator(at: directory, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
         var total: UInt64 = 0
         for case let fileURL as URL in enumerator {
-            guard let attrs = try? fm.attributesOfItem(atPath: fileURL.path),
-                  let size = attrs[.size] as? UInt64
-            else { continue }
-            total += size
+            total += UInt64((try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
         return total
     }
 
     func clearCache() {
-        let dir = Self.cacheDirectoryURL
         let fm = FileManager.default
-        guard let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        guard let contents = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
         for url in contents {
             try? fm.removeItem(at: url)
         }
@@ -107,11 +137,66 @@ final class WallpaperCacheManager {
         }
     }
 
-    private static func defaultLocalURL(for url: URL) -> URL {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appending(path: "WallpaperCache", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let hash = url.absoluteString.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
-        return dir.appending(path: "\(hash).mp4")
+    /// Renames files cached under the old scheme (the URL's UTF-8 bytes hex-encoded, plus
+    /// `.mp4`) to their hashed name, so favorites stay available offline after updating.
+    nonisolated static func migrateLegacyFilenames(in directory: URL) {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
+        for file in contents where file.pathExtension == "mp4" {
+            let stem = file.deletingPathExtension().lastPathComponent
+            // Hashed names never decode to a valid URL, so only legacy files match.
+            guard let url = legacyURL(fromHexName: stem) else { continue }
+            let destination = localURL(for: url, in: directory)
+            if fm.fileExists(atPath: destination.path(percentEncoded: false)) {
+                try? fm.removeItem(at: file)
+            } else {
+                try? fm.moveItem(at: file, to: destination)
+            }
+        }
+    }
+
+    nonisolated static func legacyURL(fromHexName name: String) -> URL? {
+        guard name.count.isMultiple(of: 2), !name.isEmpty else { return nil }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(name.count / 2)
+        var index = name.startIndex
+        while index < name.endIndex {
+            let next = name.index(index, offsetBy: 2)
+            guard let byte = UInt8(name[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        guard let string = String(bytes: bytes, encoding: .utf8),
+              let url = URL(string: string), url.scheme != nil else { return nil }
+        return url
+    }
+}
+
+/// Forwards a download task's `fractionCompleted` to `onProgress`, in steps of at least 1%.
+nonisolated final class DownloadProgressReporter: NSObject, URLSessionTaskDelegate, Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+    // NSKeyValueObservation isn't Sendable, but it is only stored here to keep it alive.
+    private let state = OSAllocatedUnfairLock<(observation: NSKeyValueObservation?, lastReported: Double)>(
+        uncheckedState: (nil, 0)
+    )
+
+    init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            self?.report(progress.fractionCompleted)
+        }
+        state.withLock { $0.observation = observation }
+    }
+
+    private func report(_ fraction: Double) {
+        let shouldReport = state.withLock { state in
+            guard fraction - state.lastReported >= 0.01 || fraction >= 1 else { return false }
+            state.lastReported = fraction
+            return true
+        }
+        if shouldReport { onProgress(fraction) }
     }
 }

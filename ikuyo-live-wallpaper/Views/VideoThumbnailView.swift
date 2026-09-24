@@ -95,9 +95,11 @@ struct VideoThumbnailView: View {
             EmptyView()
         } else {
             switch downloadState ?? .notStarted {
-            case .downloading:
-                ProgressView()
+            case .downloading(let progress):
+                ProgressView(value: progress)
+                    .progressViewStyle(.circular)
                     .controlSize(.small)
+                    .help("Downloading… \(Int(progress * 100))%")
                     .tint(.white)
                     .shadow(radius: 1)
             case .completed:
