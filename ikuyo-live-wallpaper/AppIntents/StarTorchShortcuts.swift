@@ -49,5 +49,13 @@ struct StarTorchShortcuts: AppShortcutsProvider {
             shortTitle: "Next Favorite",
             systemImageName: "heart.fill"
         )
+        AppShortcut(
+            intent: NextInCollectionIntent(),
+            phrases: [
+                "Next wallpaper in my collection in \(.applicationName)",
+            ],
+            shortTitle: "Next in Collection",
+            systemImageName: "rectangle.stack"
+        )
     }
 }

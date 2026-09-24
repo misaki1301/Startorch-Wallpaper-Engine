@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import StarTorch_Wallpaper_Engine
 
@@ -22,5 +23,28 @@ struct SidebarItemTests {
         let images = Set(SidebarItem.allCases.map(\.systemImage))
         #expect(ids.count == SidebarItem.allCases.count)
         #expect(images.count == SidebarItem.allCases.count)
+    }
+
+    @Test("A collection's raw value round-trips its UUID, since it's also @SceneStorage-persisted")
+    func collectionRawValueRoundTrips() {
+        let id = UUID()
+        let item = SidebarItem.collection(id)
+        #expect(SidebarItem(rawValue: item.rawValue) == item)
+        #expect(item.collectionID == id)
+        #expect(item.rawValue == "collection:\(id.uuidString)")
+    }
+
+    @Test("A garbled or unknown raw value fails to decode, rather than crashing or aliasing a fixed case")
+    func invalidRawValuesReturnNil() {
+        #expect(SidebarItem(rawValue: "collection:not-a-uuid") == nil)
+        #expect(SidebarItem(rawValue: "collection:") == nil)
+        #expect(SidebarItem(rawValue: "somethingElse") == nil)
+    }
+
+    @Test("Only .collection carries a collectionID")
+    func collectionIDIsNilForFixedCases() {
+        for item in SidebarItem.allCases {
+            #expect(item.collectionID == nil)
+        }
     }
 }

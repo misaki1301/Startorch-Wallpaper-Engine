@@ -93,3 +93,37 @@ struct NextFavoriteWallpaperIntent: AppIntent {
         return .result(dialog: "Set \(next.name) as your wallpaper.")
     }
 }
+
+struct NextInCollectionIntent: AppIntent {
+    static let title: LocalizedStringResource = "Next in Collection"
+    static let description = IntentDescription("Starts the next wallpaper in a StarTorch collection.")
+    static let openAppWhenRun: Bool = false
+
+    @Parameter(title: "Collection")
+    var collection: WallpaperCollectionEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Set the next wallpaper in \(\.$collection)")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let manager = WallpaperIntentBridge.manager, let library = WallpaperIntentBridge.library else {
+            throw WallpaperIntentError.appNotReady
+        }
+        guard let id = UUID(uuidString: collection.id), let stored = library.collection(id) else {
+            throw WallpaperIntentError.appNotReady
+        }
+        let urls = stored.itemURLs
+        guard !urls.isEmpty else {
+            return .result(dialog: "\(collection.name) doesn't have any wallpapers yet.")
+        }
+        let currentIndex = urls.firstIndex { $0 == manager.currentURL }
+        let nextIndex = currentIndex.map { urls.index(after: $0) % urls.count } ?? 0
+        let nextURL = urls[nextIndex]
+        manager.start(with: nextURL)
+        let name = (library.catalog + (WallpaperIntentBridge.importedStore?.items ?? []))
+            .first { $0.url == nextURL }?.name ?? nextURL.deletingPathExtension().lastPathComponent
+        return .result(dialog: "Set \(name) as your wallpaper.")
+    }
+}
