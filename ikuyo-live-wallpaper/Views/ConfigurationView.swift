@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct ConfigurationView: View {
-    @State private var showInDock = true
     @State private var cacheSize: UInt64 = 0
     @Environment(WallpaperCacheManager.self) private var cacheManager
+    @Environment(AppSettings.self) private var settings
 
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
 
@@ -33,10 +33,10 @@ struct ConfigurationView: View {
                     .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
             }
 
-            Text("ikuyo")
+            Text("StarTorch")
                 .font(.system(size: 28, weight: .bold))
 
-            Text("Live Wallpaper")
+            Text("Wallpaper Engine")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -45,8 +45,9 @@ struct ConfigurationView: View {
     }
 
     private var dockSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $showInDock) {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $settings.showDockIcon) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Show in Dock")
                         .font(.body)
@@ -56,7 +57,7 @@ struct ConfigurationView: View {
                 }
             }
             .toggleStyle(.switch)
-            .onChange(of: showInDock) { _, newValue in
+            .onChange(of: settings.showDockIcon) { _, newValue in
                 applyDockSetting(newValue)
             }
         }
@@ -89,12 +90,6 @@ struct ConfigurationView: View {
         }
         .padding()
         .onAppear {
-            if let saved = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool {
-                showInDock = saved
-                NSApplication.shared.setActivationPolicy(saved ? .regular : .accessory)
-            } else {
-                showInDock = NSApplication.shared.activationPolicy() == .regular
-            }
             cacheSize = cacheManager.cacheSize()
         }
     }
@@ -133,7 +128,6 @@ struct ConfigurationView: View {
     }
 
     private func applyDockSetting(_ show: Bool) {
-        UserDefaults.standard.set(show, forKey: "showDockIcon")
         NSApplication.shared.setActivationPolicy(show ? .regular : .accessory)
         if show {
             NSApplication.shared.activate(ignoringOtherApps: true)
@@ -144,5 +138,6 @@ struct ConfigurationView: View {
 #Preview {
     ConfigurationView()
         .environment(WallpaperCacheManager())
+        .environment(AppSettings())
         .frame(width: 400, height: 400)
 }

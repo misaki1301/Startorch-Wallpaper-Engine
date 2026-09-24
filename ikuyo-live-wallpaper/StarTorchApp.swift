@@ -2,16 +2,25 @@ import SwiftUI
 import SwiftData
 
 @main
-struct ikuyo_live_wallpaperApp: App {
+struct StarTorchApp: App {
     @State private var wallpaperManager = WallpaperManager()
-    @State private var cacheManager = WallpaperCacheManager()
+    @State private var cacheManager: WallpaperCacheManager
+    @State private var library: WallpaperLibrary
     @State private var importedStore = ImportedWallpaperStore()
+    @State private var settings: AppSettings
     @State private var showSplash = true
     private let statsService = SystemStatsService()
 
     init() {
-        let showInDock = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
-        NSApplication.shared.setActivationPolicy(showInDock ? .regular : .accessory)
+        let settings = AppSettings()
+        let cacheManager = WallpaperCacheManager()
+        _settings = State(initialValue: settings)
+        _cacheManager = State(initialValue: cacheManager)
+        let library = WallpaperLibrary(cacheManager: cacheManager)
+        _library = State(initialValue: library)
+        // Refresh once per launch, independent of any window's lifetime.
+        Task { await library.refreshCatalog() }
+        NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
     }
 
     var body: some Scene {
@@ -22,10 +31,10 @@ struct ikuyo_live_wallpaperApp: App {
                         .environment(wallpaperManager)
                         .environment(cacheManager)
                         .environment(importedStore)
+                        .environment(settings)
+                        .environment(library)
                         .onAppear {
-                            hideTitleBar(true)
                             statsService.start()
-                            resizeWindowForContent()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                                 withAnimation(.easeInOut(duration: 0.5)) {
                                     showSplash = false
@@ -37,15 +46,14 @@ struct ikuyo_live_wallpaperApp: App {
                         .environment(wallpaperManager)
                         .environment(cacheManager)
                         .environment(importedStore)
-                        .onAppear {
-                            hideTitleBar(false)
-                            resizeWindowForContent()
-                        }
+                        .environment(settings)
+                        .environment(library)
                 }
             }
         }
+        .defaultSize(width: 900, height: 600)
 
-        MenuBarExtra("Ikuyo Live Wallpaper", systemImage: "photo.on.rectangle.angled") {
+        MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
             StatsMenuView(stats: statsService)
 
             Divider()
@@ -54,7 +62,7 @@ struct ikuyo_live_wallpaperApp: App {
                 if wallpaperManager.isActive {
                     wallpaperManager.stop()
                 } else {
-                    let url = UserDefaults.standard.url(forKey: "wallpaperURL")
+                    let url = settings.lastWallpaperURL
                         ?? Bundle.main.url(forResource: "test", withExtension: "mp4")
                         ?? URL(string: "about:blank")!
                     wallpaperManager.start(with: url)
@@ -108,21 +116,3 @@ struct StatsMenuView: View {
         .padding(.vertical, 4)
     }
 }
-
-private func hideTitleBar(_ hide: Bool) {
-    if let window = NSApplication.shared.windows.first {
-        if hide {
-            window.styleMask.remove(.titled)
-        } else {
-            window.styleMask.insert(.titled)
-        }
-    }
-}
-
-private func resizeWindowForContent() {
-    if let window = NSApplication.shared.windows.first {
-        window.setContentSize(NSSize(width: 900, height: 600))
-        window.center()
-    }
-}
-

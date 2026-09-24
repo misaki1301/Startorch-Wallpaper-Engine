@@ -1,7 +1,7 @@
 import AVFoundation
 import UniformTypeIdentifiers
 
-struct VideoMetadata {
+nonisolated struct VideoMetadata: Sendable {
     let codec: String
     let resolution: CGSize
     let fileSize: UInt64
@@ -10,30 +10,30 @@ struct VideoMetadata {
     let estimatedHEVCSize: UInt64
 }
 
-enum VideoConverter {
+nonisolated enum VideoConverter {
     static func metadata(for url: URL) async throws -> VideoMetadata {
         let asset = AVURLAsset(url: url)
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? UInt64 ?? 0
-        let duration = asset.duration
+        let duration = try await asset.load(.duration)
         var codec = "Unknown"
         var resolution = CGSize.zero
         var bitrate: Float = 0
 
         if let videoTrack = try? await asset.loadTracks(withMediaType: .video).first {
-            let descs = videoTrack.formatDescriptions as! [CMFormatDescription]
+            let (descs, naturalSize, dataRate) = try await videoTrack.load(
+                .formatDescriptions, .naturalSize, .estimatedDataRate
+            )
             if let first = descs.first {
-                let fourCC = CMFormatDescriptionGetMediaSubType(first)
-                codec = fourCCToString(fourCC)
+                codec = fourCCToString(CMFormatDescriptionGetMediaSubType(first))
             }
-            resolution = videoTrack.naturalSize
-            bitrate = videoTrack.estimatedDataRate
+            resolution = naturalSize
+            bitrate = dataRate
         }
 
         let estimatedHEVCSize: UInt64
         if bitrate > .zero {
-            let durationSec = duration.seconds
             let hevcBitrate = Double(bitrate) * 0.5
-            estimatedHEVCSize = UInt64(hevcBitrate / 8 * durationSec)
+            estimatedHEVCSize = UInt64(hevcBitrate / 8 * duration.seconds)
         } else {
             estimatedHEVCSize = UInt64(Double(fileSize) * 0.5)
         }
@@ -51,24 +51,28 @@ enum VideoConverter {
     static func transcodeToHEVC(
         source: URL,
         output: URL,
-        progress: @escaping (Double) -> Void
+        progress: @escaping @MainActor @Sendable (Double) -> Void
     ) async throws {
         let asset = AVURLAsset(url: source)
         guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
             throw VideoConverterError.noVideoTrack
         }
+        let duration = try await asset.load(.duration)
+        let (naturalSize, dataRate, frameRate) = try await videoTrack.load(
+            .naturalSize, .estimatedDataRate, .nominalFrameRate
+        )
 
-        let sourceBitrate = videoTrack.estimatedDataRate > 0 ? videoTrack.estimatedDataRate : 5_000_000
+        let sourceBitrate = dataRate > 0 ? dataRate : 5_000_000
         let hevcBitrate = Double(sourceBitrate) * 0.5
 
         let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
         let outputSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: videoTrack.naturalSize.width,
-            AVVideoHeightKey: videoTrack.naturalSize.height,
+            AVVideoWidthKey: naturalSize.width,
+            AVVideoHeightKey: naturalSize.height,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: Int(hevcBitrate),
-                AVVideoExpectedSourceFrameRateKey: videoTrack.nominalFrameRate,
+                AVVideoExpectedSourceFrameRateKey: frameRate,
             ] as [String: Any],
         ]
 
@@ -80,11 +84,11 @@ enum VideoConverter {
         let reader = try AVAssetReader(asset: asset)
 
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.frameDuration = CMTime(value: 1, timescale: Int32(videoTrack.nominalFrameRate))
-        videoComposition.renderSize = videoTrack.naturalSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: Int32(frameRate))
+        videoComposition.renderSize = naturalSize
 
         let passThroughInstruction = AVMutableVideoCompositionInstruction()
-        passThroughInstruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        passThroughInstruction.timeRange = CMTimeRange(start: .zero, duration: duration)
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
         passThroughInstruction.layerInstructions = [layerInstruction]
@@ -106,55 +110,92 @@ enum VideoConverter {
         }
         writer.startSession(atSourceTime: .zero)
 
-        let totalDuration = asset.duration.seconds
-        var lastProgress: Double = 0
+        let session = TranscodeSession(
+            reader: reader,
+            readerOutput: readerOutput,
+            writer: writer,
+            writerInput: writerInput,
+            totalSeconds: duration.seconds,
+            progress: progress
+        )
+        try await session.run()
+    }
 
+    private static func fourCCToString(_ fourCC: FourCharCode) -> String {
+        let bytes: [UInt8] = [24, 16, 8, 0].map { UInt8((fourCC >> $0) & 0xFF) }
+        return String(decoding: bytes, as: UTF8.self).trimmingCharacters(in: .whitespaces)
+    }
+}
+
+/// Pumps samples from the reader to the writer. All mutable state is only touched from
+/// `queue`, the serial queue AVAssetWriterInput delivers `requestMediaDataWhenReady` on,
+/// which is what makes the `@unchecked Sendable` conformance sound.
+private nonisolated final class TranscodeSession: @unchecked Sendable {
+    private let reader: AVAssetReader
+    private let readerOutput: AVAssetReaderOutput
+    private let writer: AVAssetWriter
+    private let writerInput: AVAssetWriterInput
+    private let totalSeconds: Double
+    private let progress: @MainActor @Sendable (Double) -> Void
+    private let queue = DispatchQueue(label: "VideoConverter.transcode", qos: .userInitiated)
+
+    private var isFinished = false
+    private var lastProgress: Double = 0
+
+    init(
+        reader: AVAssetReader,
+        readerOutput: AVAssetReaderOutput,
+        writer: AVAssetWriter,
+        writerInput: AVAssetWriterInput,
+        totalSeconds: Double,
+        progress: @escaping @MainActor @Sendable (Double) -> Void
+    ) {
+        self.reader = reader
+        self.readerOutput = readerOutput
+        self.writer = writer
+        self.writerInput = writerInput
+        self.totalSeconds = totalSeconds
+        self.progress = progress
+    }
+
+    func run() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            var isFinished = false
-            writerInput.requestMediaDataWhenReady(on: .global(qos: .userInitiated)) {
-                guard !isFinished else { return }
-                while writerInput.isReadyForMoreMediaData {
-                    guard let sampleBuffer = readerOutput.copyNextSampleBuffer() else {
-                        writerInput.markAsFinished()
-                        isFinished = true
-                        writer.finishWriting {
-                            if reader.status == .completed {
-                                continuation.resume()
-                            } else {
-                                continuation.resume(throwing: VideoConverterError.transcodingFailed(reader.error))
-                            }
-                        }
-                        return
-                    }
-
-                    guard writerInput.isReadyForMoreMediaData else { continue }
-
-                    writerInput.append(sampleBuffer)
-
-                    let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    let pct = min(pts.seconds / totalDuration, 1)
-                    if pct - lastProgress >= 0.05 {
-                        lastProgress = pct
-                        DispatchQueue.main.async { progress(pct) }
-                    }
-                }
+            writerInput.requestMediaDataWhenReady(on: queue) { [self] in
+                pump(continuation)
             }
         }
     }
 
-    private static func fourCCToString(_ fourCC: FourCharCode) -> String {
-        let chars: [CChar] = [
-            CChar((fourCC >> 24) & 0xFF),
-            CChar((fourCC >> 16) & 0xFF),
-            CChar((fourCC >> 8) & 0xFF),
-            CChar(fourCC & 0xFF),
-            0,
-        ]
-        return String(cString: chars).trimmingCharacters(in: .whitespaces)
+    private func pump(_ continuation: CheckedContinuation<Void, any Error>) {
+        guard !isFinished else { return }
+        while writerInput.isReadyForMoreMediaData {
+            guard let sampleBuffer = readerOutput.copyNextSampleBuffer() else {
+                writerInput.markAsFinished()
+                isFinished = true
+                writer.finishWriting { [self] in
+                    if reader.status == .completed {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(throwing: VideoConverterError.transcodingFailed(reader.error))
+                    }
+                }
+                return
+            }
+
+            writerInput.append(sampleBuffer)
+
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let pct = min(pts.seconds / totalSeconds, 1)
+            if pct - lastProgress >= 0.05 {
+                lastProgress = pct
+                let progress = progress
+                Task { @MainActor in progress(pct) }
+            }
+        }
     }
 }
 
-enum VideoConverterError: LocalizedError {
+nonisolated enum VideoConverterError: LocalizedError {
     case noVideoTrack
     case cannotAddInput
     case cannotAddOutput

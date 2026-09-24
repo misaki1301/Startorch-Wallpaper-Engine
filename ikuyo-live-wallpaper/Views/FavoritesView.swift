@@ -1,19 +1,12 @@
 import SwiftUI
 
 struct FavoritesView: View {
-    let items: [WallpaperItem]
+    @Environment(WallpaperLibrary.self) private var library
     @Environment(WallpaperManager.self) private var manager
     @Environment(WallpaperCacheManager.self) private var cacheManager
-    @State private var favoriteURLs: Set<String>
-
-    init(items: [WallpaperItem]) {
-        self.items = items
-        self._favoriteURLs = State(initialValue: Set(UserDefaults.standard.stringArray(forKey: "favoriteWallpapers") ?? []))
-    }
 
     private var favoritedItems: [WallpaperItem] {
-        items.filter { favoriteURLs.contains($0.url.absoluteString) }
-            .sorted { $0.name < $1.name }
+        library.favoriteCatalogItems
     }
 
     var body: some View {
@@ -46,7 +39,7 @@ struct FavoritesView: View {
             downloadState: cacheManager.states[item.url],
             isFavorite: Binding(
                 get: { true },
-                set: { if !$0 { toggleFavorite(item.url) } }
+                set: { library.setFavorite($0, for: item.url) }
             )
         )
         .onTapGesture {
@@ -56,27 +49,15 @@ struct FavoritesView: View {
             Button("Set as Wallpaper") { manager.start(with: item.url) }
             Button("Preview") { NSWorkspace.shared.open(item.url) }
             Divider()
-            Button("Remove from Favorites") { toggleFavorite(item.url) }
+            Button("Remove from Favorites") { library.setFavorite(false, for: item.url) }
         }
-    }
-
-    private func saveFavorites() {
-        UserDefaults.standard.set(Array(favoriteURLs), forKey: "favoriteWallpapers")
-    }
-
-    private func toggleFavorite(_ url: URL) {
-        let key = url.absoluteString
-        favoriteURLs.remove(key)
-        cacheManager.removeCache(for: url)
-        saveFavorites()
     }
 }
 
 #Preview {
-    FavoritesView(items: [
-        WallpaperItem(url: URL(string: "https://cdn.donmai.us/original/b6/b9/b6b9d3154ebac86ca2cd80b47c2e856c.mp4")!),
-    ])
-    .environment(WallpaperManager())
-    .environment(WallpaperCacheManager())
-    .frame(width: 800, height: 600)
+    FavoritesView()
+        .environment(WallpaperLibrary())
+        .environment(WallpaperManager())
+        .environment(WallpaperCacheManager())
+        .frame(width: 800, height: 600)
 }

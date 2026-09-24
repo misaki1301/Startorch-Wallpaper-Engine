@@ -143,7 +143,7 @@ struct VideoThumbnailView: View {
 
 #Preview {
     VideoThumbnailView(
-        url: URL(string: "https://cdn.donmai.us/original/44/2a/442a58406a379375c3ff4c8d676b8c19.mp4")!,
+        url: URL(string: "https://example.com/sample.mp4")!,
         name: "Sample Video",
         isActive: false,
         downloadState: nil,

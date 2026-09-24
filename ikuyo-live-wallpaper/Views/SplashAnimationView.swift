@@ -12,7 +12,7 @@ struct SplashAnimationView: View {
             VStack(spacing: 12) {
                 Spacer()
 
-                Text("ikuyo")
+                Text("StarTorch")
                     .font(.system(size: 48, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
@@ -23,7 +23,7 @@ struct SplashAnimationView: View {
                     )
                     .opacity(titleOpacity)
 
-                Text("Live Wallpaper")
+                Text("Wallpaper Engine")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .opacity(titleOpacity)

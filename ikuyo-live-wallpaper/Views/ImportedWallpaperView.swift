@@ -10,7 +10,7 @@ struct ImportedWallpaperView: View {
     @Environment(ImportedWallpaperStore.self) private var store
     @Environment(WallpaperManager.self) private var manager
     @Environment(WallpaperCacheManager.self) private var cacheManager
-    @State private var favoriteURLs: Set<String> = []
+    @Environment(WallpaperLibrary.self) private var library
     @State private var importSource: ImportSource?
 
     var body: some View {
@@ -44,7 +44,6 @@ struct ImportedWallpaperView: View {
             }
         }
         .navigationTitle("My Files")
-        .onAppear(perform: loadFavorites)
         .sheet(item: $importSource) { source in
             ImportPreviewView(
                 sourceURL: source.url,
@@ -87,8 +86,8 @@ struct ImportedWallpaperView: View {
             downloadState: cacheManager.states[item.url],
             hideDownloadBadge: true,
             isFavorite: Binding(
-                get: { favoriteURLs.contains(item.url.absoluteString) },
-                set: { toggleFavorite(item.url, $0) }
+                get: { library.isFavorite(item.url) },
+                set: { library.setFavorite($0, for: item.url) }
             )
         )
         .overlay(alignment: .bottomTrailing) {
@@ -104,8 +103,8 @@ struct ImportedWallpaperView: View {
             Button("Set as Wallpaper") { manager.start(with: item.url) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
             Divider()
-            Button(favoriteURLs.contains(item.url.absoluteString) ? "Remove from Favorites" : "Add to Favorites") {
-                toggleFavorite(item.url)
+            Button(library.isFavorite(item.url) ? "Remove from Favorites" : "Add to Favorites") {
+                library.toggleFavorite(item.url)
             }
             Divider()
             Button("Delete", role: .destructive) { deleteItem(item) }
@@ -137,35 +136,11 @@ struct ImportedWallpaperView: View {
     }
 
     private func deleteItem(_ item: WallpaperItem) {
-        if favoriteURLs.contains(item.url.absoluteString) {
-            cacheManager.removeCache(for: item.url)
-            favoriteURLs.remove(item.url.absoluteString)
-            saveFavorites()
-        }
+        library.setFavorite(false, for: item.url)
         if manager.currentURL == item.url {
             manager.stop()
         }
         store.delete(item.url)
-    }
-
-    private func loadFavorites() {
-        favoriteURLs = Set(UserDefaults.standard.stringArray(forKey: "favoriteWallpapers") ?? [])
-    }
-
-    private func saveFavorites() {
-        UserDefaults.standard.set(Array(favoriteURLs), forKey: "favoriteWallpapers")
-    }
-
-    private func toggleFavorite(_ url: URL, _ force: Bool? = nil) {
-        let key = url.absoluteString
-        if let force {
-            if force { favoriteURLs.insert(key); cacheManager.startDownload(url) }
-            else { favoriteURLs.remove(key); cacheManager.removeCache(for: url) }
-        } else {
-            if favoriteURLs.contains(key) { favoriteURLs.remove(key); cacheManager.removeCache(for: url) }
-            else { favoriteURLs.insert(key); cacheManager.startDownload(url) }
-        }
-        saveFavorites()
     }
 
     private func formatBytes(_ bytes: UInt64) -> String {
@@ -180,5 +155,6 @@ struct ImportedWallpaperView: View {
         .environment(ImportedWallpaperStore())
         .environment(WallpaperManager())
         .environment(WallpaperCacheManager())
+        .environment(WallpaperLibrary())
         .frame(width: 800, height: 600)
 }

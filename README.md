@@ -72,7 +72,7 @@ StarTorch Wallpaper Engine/
 
 - GPU usage not available (no public per-process GPU API on macOS)
 - HEVC conversion may fail on some exotic video formats (falls back gracefully)
-- Video sources are currently hardcoded URLs (configurable via code)
+- The gallery is empty until licensed wallpapers are added to the catalog; import your own videos meanwhile
 
 ## Contributing
 
@@ -91,4 +91,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 Created by [@misaki1301](https://github.com/misaki1301)
 
-Wallpaper samples from [danbooru.donmai.us](https://danbooru.donmai.us) and [Pexels](https://pexels.com) (testing only).
+Gallery wallpapers are listed in [`catalog/catalog.json`](catalog/catalog.json) with their creators and licenses. See [catalog/README.md](catalog/README.md) to contribute one.
