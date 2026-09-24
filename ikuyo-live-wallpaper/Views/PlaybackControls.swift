@@ -14,10 +14,10 @@ struct PlaybackControls: View {
             .help("Pause the wallpaper")
         } else {
             Button(manager.isActive ? "Resume Wallpaper" : "Start Wallpaper", systemImage: "play.fill") {
-                manager.play(orStart: settings.lastWallpaperURL)
+                manager.play(orStart: settings.availableLastWallpaperURL())
             }
             .help(manager.isActive ? "Resume the wallpaper" : "Start the last wallpaper")
-            .disabled(!manager.isActive && settings.lastWallpaperURL == nil)
+            .disabled(!manager.isActive && settings.availableLastWallpaperURL() == nil)
         }
 
         Button("Stop Wallpaper", systemImage: "stop.fill") {

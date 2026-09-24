@@ -48,6 +48,12 @@ struct ResumeOnLaunchTests {
         #expect(settings.wallpaperToResume(fileExists: { _ in false }) == remote)
     }
 
+    @Test func playIsNotOfferedForATrashedLastWallpaper() {
+        let settings = makeSettings(wasActive: false, last: video)
+        #expect(settings.availableLastWallpaperURL(fileExists: { _ in true }) == video)
+        #expect(settings.availableLastWallpaperURL(fileExists: { _ in false }) == nil)
+    }
+
     @Test func persistsResumeSettings() {
         let defaults = makeDefaults()
         let settings = AppSettings(defaults: defaults)

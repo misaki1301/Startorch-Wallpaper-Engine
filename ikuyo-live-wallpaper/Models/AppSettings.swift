@@ -41,13 +41,20 @@ final class AppSettings {
         wallpaperWasActive = defaults.bool(forKey: Key.wallpaperWasActive)
     }
 
+    /// `lastWallpaperURL`, unless it is a local file that no longer exists (e.g. it was trashed).
+    func availableLastWallpaperURL(
+        fileExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+    ) -> URL? {
+        guard let url = lastWallpaperURL else { return nil }
+        return url.isFileURL && !fileExists(url) ? nil : url
+    }
+
     /// The wallpaper to start at launch, if any: resuming is on, a wallpaper was playing when
-    /// the app last quit, and (for local files) the file still exists.
+    /// the app last quit, and it is still available.
     func wallpaperToResume(
         fileExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
     ) -> URL? {
-        guard resumeWallpaperOnLaunch, wallpaperWasActive, let url = lastWallpaperURL else { return nil }
-        if url.isFileURL && !fileExists(url) { return nil }
-        return url
+        guard resumeWallpaperOnLaunch, wallpaperWasActive else { return nil }
+        return availableLastWallpaperURL(fileExists: fileExists)
     }
 }
