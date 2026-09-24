@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import StarTorch_Wallpaper_Engine
 
-private func makeTempDirectory() throws -> URL {
+func makeTempDirectory() throws -> URL {
     let dir = FileManager.default.temporaryDirectory.appending(path: "StarTorchTests-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
 }
 
-private func makeDefaults() -> UserDefaults {
+func makeDefaults() -> UserDefaults {
     let suite = "StarTorchTests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
@@ -139,6 +139,14 @@ struct AppSettingsTests {
         let reloaded = AppSettings(defaults: defaults)
         #expect(!reloaded.showDockIcon)
         #expect(reloaded.lastWallpaperURL == url)
+    }
+
+    @Test func onboardingIsNotCompletedByDefaultAndPersistsOnceSet() {
+        let defaults = makeDefaults()
+        #expect(!AppSettings(defaults: defaults).hasCompletedOnboarding)
+
+        AppSettings(defaults: defaults).hasCompletedOnboarding = true
+        #expect(AppSettings(defaults: defaults).hasCompletedOnboarding)
     }
 }
 

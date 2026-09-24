@@ -3,116 +3,102 @@ import SwiftData
 
 @main
 struct StarTorchApp: App {
-    @State private var wallpaperManager = WallpaperManager()
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+    @State private var wallpaperManager: WallpaperManager
     @State private var cacheManager: WallpaperCacheManager
     @State private var library: WallpaperLibrary
-    @State private var importedStore = ImportedWallpaperStore()
+    @State private var importedStore: ImportedWallpaperStore
     @State private var settings: AppSettings
-    @State private var showSplash = true
+    @State private var scheduleService: ScheduleService
     private let statsService = SystemStatsService()
 
     init() {
         let settings = AppSettings()
         let cacheManager = WallpaperCacheManager()
+        // A test run must never read or change the real desktop picture.
+        let desktop: any DesktopImageSetting = AppEnvironment.isHostingTests ? InertDesktop() : SystemDesktop()
+        let wallpaperManager = WallpaperManager(restorer: DesktopRestorer(desktop: desktop), settings: settings)
+        _wallpaperManager = State(initialValue: wallpaperManager)
         _settings = State(initialValue: settings)
         _cacheManager = State(initialValue: cacheManager)
         let library = WallpaperLibrary(cacheManager: cacheManager)
         _library = State(initialValue: library)
+        let importedStore = ImportedWallpaperStore()
+        _importedStore = State(initialValue: importedStore)
+        // A test run must never touch the desktop appearance/wake/clock notification centers.
+        let scheduleService = ScheduleService(
+            manager: wallpaperManager,
+            library: library,
+            settings: settings,
+            observeSystemEvents: !AppEnvironment.isHostingTests
+        )
+        _scheduleService = State(initialValue: scheduleService)
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
+
+        if !AppEnvironment.isHostingTests {
+            // App Intents, Shortcuts and the Focus filter are instantiated by the system, not by
+            // SwiftUI, so they have no environment to read from — they go through this bridge to
+            // reach the very instances the UI uses. Never wired under the test host, so a unit
+            // test never touches a shared, process-wide static.
+            WallpaperIntentBridge.manager = wallpaperManager
+            WallpaperIntentBridge.library = library
+            WallpaperIntentBridge.importedStore = importedStore
+            WallpaperIntentBridge.settings = settings
+
+            Task {
+                // If the last run crashed or was killed, its desktop pictures were never restored.
+                wallpaperManager.recoverDesktopFromPreviousSession()
+                if let url = settings.wallpaperToResume() {
+                    // Brings back each display's own wallpaper; `url` covers older installs.
+                    wallpaperManager.resumeLastSession(fallback: url)
+                }
+            }
+        }
     }
 
     var body: some Scene {
-        WindowGroup {
-            ZStack {
-                if showSplash {
-                    SplashAnimationView()
-                        .environment(wallpaperManager)
-                        .environment(cacheManager)
-                        .environment(importedStore)
-                        .environment(settings)
-                        .environment(library)
-                        .onAppear {
-                            statsService.start()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation(.easeInOut(duration: 0.5)) {
-                                    showSplash = false
-                                }
-                            }
-                        }
-                } else {
-                    ContentView()
-                        .environment(wallpaperManager)
-                        .environment(cacheManager)
-                        .environment(importedStore)
-                        .environment(settings)
-                        .environment(library)
-                }
-            }
+        // A single window, so "Open StarTorch…" brings it back instead of stacking copies. The
+        // system restores its frame; there's no forced size or splash on top of that.
+        Window("StarTorch", id: MainWindow.id) {
+            AppRootView()
+                .environment(wallpaperManager)
+                .environment(cacheManager)
+                .environment(importedStore)
+                .environment(settings)
+                .environment(library)
+                .environment(scheduleService)
         }
         .defaultSize(width: 900, height: 600)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About StarTorch") {
+                    AboutPanel.show()
+                }
+            }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(cacheManager)
+                .environment(settings)
+                .environment(wallpaperManager)
+                .environment(library)
+                .environment(importedStore)
+                .environment(scheduleService)
+        }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
-            StatsMenuView(stats: statsService)
-
-            Divider()
-
-            Button(wallpaperManager.isActive ? "Stop Wallpaper" : "Start Wallpaper") {
-                if wallpaperManager.isActive {
-                    wallpaperManager.stop()
-                } else {
-                    let url = settings.lastWallpaperURL
-                        ?? Bundle.main.url(forResource: "test", withExtension: "mp4")
-                        ?? URL(string: "about:blank")!
-                    wallpaperManager.start(with: url)
-                }
-            }
-            if wallpaperManager.isActive {
-                if wallpaperManager.isPaused {
-                    Button("Resume") {
-                        wallpaperManager.resume()
-                    }
-                } else {
-                    Button("Pause") {
-                        wallpaperManager.pause()
-                    }
-                }
-            }
-
-            Divider()
-
-            Button("Quit") {
-                wallpaperManager.stop()
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+            MenuBarPanelView(stats: statsService)
+                .environment(wallpaperManager)
+                .environment(settings)
+                .environment(library)
         }
+        .menuBarExtraStyle(.window)
     }
 }
-struct StatsMenuView: View {
-    @ObservedObject var stats: SystemStatsService
 
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text("CPU:")
-                    .foregroundStyle(.secondary)
-                Text(String(format: "%.1f%%", stats.cpuUsage))
-                    .monospacedDigit()
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-
-            HStack {
-                Text("RAM:")
-                    .foregroundStyle(.secondary)
-                Text("\(stats.memoryUsedFormatted) / \(stats.memoryTotalFormatted)")
-                    .monospacedDigit()
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-        }
-        .padding(.vertical, 4)
-    }
+enum MainWindow {
+    static let id = "main"
 }
