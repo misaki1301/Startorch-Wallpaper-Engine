@@ -3,7 +3,7 @@ import SwiftData
 
 @main
 struct StarTorchApp: App {
-    @State private var wallpaperManager = WallpaperManager()
+    @State private var wallpaperManager: WallpaperManager
     @State private var cacheManager: WallpaperCacheManager
     @State private var library: WallpaperLibrary
     @State private var importedStore = ImportedWallpaperStore()
@@ -14,6 +14,10 @@ struct StarTorchApp: App {
     init() {
         let settings = AppSettings()
         let cacheManager = WallpaperCacheManager()
+        // A test run must never read or change the real desktop picture.
+        let desktop: any DesktopImageSetting = AppEnvironment.isHostingTests ? InertDesktop() : SystemDesktop()
+        let wallpaperManager = WallpaperManager(restorer: DesktopRestorer(desktop: desktop))
+        _wallpaperManager = State(initialValue: wallpaperManager)
         _settings = State(initialValue: settings)
         _cacheManager = State(initialValue: cacheManager)
         let library = WallpaperLibrary(cacheManager: cacheManager)
@@ -21,6 +25,13 @@ struct StarTorchApp: App {
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
+
+        if !AppEnvironment.isHostingTests {
+            Task {
+                // If the last run crashed or was killed, its desktop pictures were never restored.
+                wallpaperManager.recoverDesktopFromPreviousSession()
+            }
+        }
     }
 
     var body: some Scene {
