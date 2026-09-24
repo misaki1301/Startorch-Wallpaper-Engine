@@ -19,7 +19,11 @@ build that:
 3. If those secrets are **not** configured, falls back to an ad-hoc signed,
    unsigned-for-Gatekeeper-purposes build so the workflow still succeeds —
    the release is clearly labeled "unsigned" in the GitHub Release notes
-   and artifact name.
+   and artifact name. This fallback build is compiled with
+   `CODE_SIGNING_ALLOWED=NO`, so it runs without the App Sandbox and
+   stores its data in `~/Library/Application Support` instead of the
+   app's sandbox container — meaning favorites and settings will **not**
+   carry over if you later switch to a notarized build (or vice versa).
 4. Packages the app as both a `.zip` and a `.dmg` (with an `/Applications`
    symlink) and uploads them as workflow artifacts. On a tag push, it also
    publishes (or updates) a GitHub Release with both files attached.

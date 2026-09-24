@@ -108,8 +108,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/$KEYCHAIN_NAME" \
-            | xcpretty && exit "${PIPESTATUS[0]}"
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/$KEYCHAIN_NAME"
 
       - name: Export signed app
         if: steps.signing.outputs.available == 'true'
@@ -130,6 +129,9 @@ jobs:
           APP_PATH="$RUNNER_TEMP/export/$APP_NAME.app"
           KEY_PATH="$RUNNER_TEMP/notary-key.p8"
 
+          # The .p8 key is kept (not deleted here) so the later "Sign,
+          # notarize, and staple DMG" step can reuse it. It is removed in
+          # the final "Clean up signing artifacts" step.
           echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode -o "$KEY_PATH"
 
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/notarize.zip"
@@ -142,18 +144,13 @@ jobs:
 
           xcrun stapler staple "$APP_PATH"
 
-          rm -f "$KEY_PATH" "$RUNNER_TEMP/notarize.zip"
+          rm -f "$RUNNER_TEMP/notarize.zip"
 
       - name: Locate signed app
         if: steps.signing.outputs.available == 'true'
         id: signed_app
         run: |
           echo "path=$RUNNER_TEMP/export/$APP_NAME.app" >> "$GITHUB_OUTPUT"
-
-      - name: Clean up signing keychain
-        if: always() && steps.signing.outputs.available == 'true'
-        run: |
-          security delete-keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" || true
 
       # ---------------------------------------------------------------
       # Unsigned fallback path (used when secrets are absent, so tag
@@ -174,8 +171,7 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty && exit "${PIPESTATUS[0]}"
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Ad-hoc sign fallback build
         if: steps.signing.outputs.available != 'true'
@@ -228,10 +224,28 @@ jobs:
           ./scripts/make-dmg.sh "${{ steps.app.outputs.path }}" "${{ steps.version.outputs.version }}" "$GITHUB_WORKSPACE"
           echo "path=$GITHUB_WORKSPACE/$DMG_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Staple DMG
+      - name: Sign, notarize, and staple DMG
         if: steps.signing.outputs.available == 'true'
+        env:
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
         run: |
-          xcrun stapler staple "${{ steps.dmg.outputs.path }}"
+          set -euo pipefail
+          DMG_PATH="${{ steps.dmg.outputs.path }}"
+          KEY_PATH="$RUNNER_TEMP/notary-key.p8"
+
+          codesign --sign "Developer ID Application" \
+            --timestamp \
+            --keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" \
+            "$DMG_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$KEY_PATH" \
+            --key-id "$NOTARY_API_KEY_ID" \
+            --issuer "$NOTARY_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -254,3 +268,9 @@ jobs:
           prerelease: false
           body: |
             ${{ steps.app.outputs.label == 'unsigned' && '⚠️ This build is **unsigned** (Developer ID signing secrets were not configured). On macOS 15+, right-click → Open no longer bypasses Gatekeeper — use System Settings → Privacy & Security → "Open Anyway" instead. See docs/RELEASING.md to enable notarized releases.' || '✅ This build is signed with a Developer ID certificate and notarized by Apple.' }}
+
+      - name: Clean up signing artifacts
+        if: always() && steps.signing.outputs.available == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" || true
+          rm -f "$RUNNER_TEMP/notary-key.p8" || true
