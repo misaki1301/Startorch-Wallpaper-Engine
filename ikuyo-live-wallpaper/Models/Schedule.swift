@@ -82,6 +82,13 @@ enum ScheduleBoundary {
 
     /// Each slot's start date for the day containing `now`, the day before and the day after —
     /// enough range that a boundary search never misses across a DST shift or the day edge.
+    ///
+    /// Builds each date from whole year/month/day/hour/minute components (`calendar.date(from:)`)
+    /// rather than adding an hour/minute `DateComponents` offset to midnight
+    /// (`calendar.date(byAdding:to:)`): adding hour-sized components is duration arithmetic (each
+    /// hour is a flat 3600 seconds), so on a spring-forward day it would land an hour late.
+    /// Building the full wall-clock date resolves the calendar's actual UTC offset for that
+    /// specific day, which is what a "6:00 AM" slot means to the user.
     private static func startDates(
         for slots: [ScheduleSlot],
         around now: Date,
@@ -91,11 +98,12 @@ enum ScheduleBoundary {
         var results: [(date: Date, slot: ScheduleSlot)] = []
         for dayOffset in -1...1 {
             guard let dayStart = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday) else { continue }
+            var dayComponents = calendar.dateComponents([.year, .month, .day], from: dayStart)
             for slot in slots {
-                var components = DateComponents()
-                components.hour = slot.startHour
-                components.minute = slot.startMinute
-                guard let date = calendar.date(byAdding: components, to: dayStart) else { continue }
+                dayComponents.hour = slot.startHour
+                dayComponents.minute = slot.startMinute
+                dayComponents.second = 0
+                guard let date = calendar.date(from: dayComponents) else { continue }
                 results.append((date, slot))
             }
         }

@@ -8,9 +8,10 @@ protocol PlaybackSignalSource: AnyObject {
     var signals: PlaybackSignals { get }
     /// Called on the main actor whenever `signals` changes.
     var onChange: ((PlaybackSignals) -> Void)? { get set }
-    /// The wallpaper windows whose visibility decides `isDesktopVisible`. Empty while no
-    /// wallpaper is running, which also stops the full-screen checks.
-    func monitorWallpaperWindows(_ windows: [NSWindow])
+    /// The wallpaper windows, keyed by display UUID, whose visibility decides
+    /// `isDesktopVisible` and `visibleDisplays`. Empty while no wallpaper is running, which also
+    /// stops the full-screen checks.
+    func monitorWallpaperWindows(_ windows: [String: NSWindow])
 }
 
 /// Signals that never change. Used when hosting unit tests and in previews.
@@ -22,7 +23,7 @@ final class FixedSignalSource: PlaybackSignalSource {
         self.signals = signals
     }
 
-    func monitorWallpaperWindows(_ windows: [NSWindow]) {}
+    func monitorWallpaperWindows(_ windows: [String: NSWindow]) {}
 }
 
 /// Watches the system for anything that decides whether the wallpaper is worth playing.
@@ -41,7 +42,7 @@ final class SystemSignalMonitor: PlaybackSignalSource {
 
     @ObservationIgnored var onChange: ((PlaybackSignals) -> Void)?
 
-    @ObservationIgnored private var wallpaperWindows: [NSWindow] = []
+    @ObservationIgnored private var wallpaperWindows: [String: NSWindow] = [:]
     @ObservationIgnored private var windowObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var observers: [(center: NotificationCenter, token: any NSObjectProtocol)] = []
     @ObservationIgnored nonisolated(unsafe) private var powerSourceLoopSource: CFRunLoopSource?
@@ -65,16 +66,16 @@ final class SystemSignalMonitor: PlaybackSignalSource {
     func stop() {
         for (center, token) in observers { center.removeObserver(token) }
         observers.removeAll()
-        monitorWallpaperWindows([])
+        monitorWallpaperWindows([:])
         if let powerSourceLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceLoopSource, .defaultMode)
             self.powerSourceLoopSource = nil
         }
     }
 
-    func monitorWallpaperWindows(_ windows: [NSWindow]) {
+    func monitorWallpaperWindows(_ windows: [String: NSWindow]) {
         for token in windowObservers { NotificationCenter.default.removeObserver(token) }
-        windowObservers = windows.map { window in
+        windowObservers = windows.values.map { window in
             NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification,
                 object: window,
@@ -156,8 +157,9 @@ final class SystemSignalMonitor: PlaybackSignalSource {
 
     private func updateDesktopVisibility() {
         // With no wallpaper windows there is nothing to cover.
-        signals.isDesktopVisible = wallpaperWindows.isEmpty
-            || wallpaperWindows.contains { $0.occlusionState.contains(.visible) }
+        let visible = Set(wallpaperWindows.filter { $0.value.occlusionState.contains(.visible) }.keys)
+        signals.isDesktopVisible = wallpaperWindows.isEmpty || !visible.isEmpty
+        signals.visibleDisplays = wallpaperWindows.isEmpty ? nil : visible
     }
 
     /// Checks for full-screen apps shortly after things settle: activating an app or entering a
@@ -166,15 +168,24 @@ final class SystemSignalMonitor: PlaybackSignalSource {
         fullScreenCheck?.cancel()
         guard !wallpaperWindows.isEmpty else {
             signals.hasFullScreenApp = false
+            signals.fullScreenDisplays = nil
             return
         }
         fullScreenCheck = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled, let self else { return }
-            self.signals.hasFullScreenApp = FullScreenDetector.everyDisplayIsCovered(
+            var displays: [String: CGRect] = [:]
+            for screen in NSScreen.screens {
+                if let id = screen.displayID, let uuid = screen.displayUUID { displays[uuid] = CGDisplayBounds(id) }
+            }
+            let covered = FullScreenDetector.coveredDisplays(
                 windows: FullScreenDetector.onScreenWindows(),
-                displays: NSScreen.screens.compactMap(\.displayID).map(CGDisplayBounds)
+                displays: displays
             )
+            var signals = self.signals
+            signals.fullScreenDisplays = covered
+            signals.hasFullScreenApp = !displays.isEmpty && covered.count == displays.count
+            self.signals = signals
         }
     }
 
@@ -194,8 +205,7 @@ nonisolated enum FullScreenDetector {
             as? [[String: Any]] ?? []
     }
 
-    /// True when every display is covered by an opaque, normal-level window. The wallpaper is one
-    /// player shared by all displays, so it keeps playing while any display still shows it.
+    /// True when every display is covered by an opaque, normal-level window.
     ///
     /// - Parameters:
     ///   - windows: Window info dictionaries (`kCGWindow…` keys), in any order.
@@ -207,6 +217,15 @@ nonisolated enum FullScreenDetector {
         return displays.allSatisfy { display in
             fullScreenBounds.contains { covers($0, display) }
         }
+    }
+
+    /// The displays (keyed by any identifier) that an opaque, normal-level window covers
+    /// completely. Each wallpaper engine pauses only when every display showing it is covered.
+    static func coveredDisplays<ID: Hashable>(windows: [[String: Any]], displays: [ID: CGRect]) -> Set<ID> {
+        let fullScreenBounds = windows.compactMap(fullScreenCandidateBounds)
+        return Set(displays.compactMap { id, display in
+            fullScreenBounds.contains { covers($0, display) } ? id : nil
+        })
     }
 
     /// Bounds of a normal-level (layer 0), visible window; nil for anything else (menu bar,

@@ -198,6 +198,8 @@ final class ScheduleService {
         withObservationTracking {
             _ = manager.currentURL
         } onChange: { [weak self] in
+            // Called before the new value is stored (same as `WallpaperManager.followPauseRules`
+            // below it); read it on the next turn.
             Task { @MainActor in self?.handleCurrentURLChange() }
         }
     }

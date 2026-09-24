@@ -8,14 +8,31 @@ struct WallpaperInspectorView: View {
     let isImported: Bool
 
     @Environment(WallpaperManager.self) private var manager
+    @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var poster: NSImage?
+    /// The poster's pixels, for the menu bar contrast check.
+    @State private var posterImage: CGImage?
     @State private var previewPlayer: AVPlayer?
     @State private var isPreviewing = false
     @State private var metadata: VideoMetadata?
 
     private var isCurrent: Bool {
-        manager.isActive && manager.currentURL == item.url
+        manager.isShowing(item.url)
+    }
+
+    /// This wallpaper's dim, blur, vignette and speed; edits apply to the desktop immediately.
+    private var readability: Binding<ReadabilitySettings> {
+        Binding(
+            get: { settings.readability(for: item.url) },
+            set: { settings.setReadability($0, for: item.url) }
+        )
+    }
+
+    private var contrast: MenuBarContrast.Analysis? {
+        posterImage.flatMap {
+            MenuBarContrast.analyze($0, screenHeight: NSScreen.main?.frame.height ?? 982, dim: readability.wrappedValue.dim)
+        }
     }
 
     var body: some View {
@@ -25,34 +42,33 @@ struct WallpaperInspectorView: View {
                 header
                 details
                 applyButton
+                Divider()
+                ReadabilityControls(readability: readability, contrast: contrast)
             }
             .padding()
         }
+        .onChange(of: readability.wrappedValue.speed) { _, speed in
+            previewPlayer?.defaultRate = Float(speed)
+            if previewPlayer?.rate != 0 { previewPlayer?.rate = Float(speed) }
+        }
+        .onChange(of: item.url) { _, _ in stopPreview() }
+        .onDisappear { stopPreview() }
         .task(id: item.url) {
+            poster = nil
+            posterImage = nil
             await loadPoster()
             metadata = try? await VideoConverter.metadata(for: item.url)
         }
     }
 
-    @ViewBuilder
+    /// The wallpaper on a miniature desktop, with this wallpaper's readability settings.
     private var preview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.fill.quaternary)
-                .aspectRatio(16 / 10, contentMode: .fit)
-
-            if isPreviewing, let previewPlayer {
-                VideoPlayer(player: previewPlayer)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else if let poster {
-                Image(nsImage: poster)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else {
-                ProgressView()
-            }
-        }
+        DesktopPreview(
+            poster: poster,
+            player: isPreviewing ? previewPlayer : nil,
+            readability: readability.wrappedValue,
+            usesDarkMenuBarText: contrast?.usesDarkText ?? false
+        )
         .overlay(alignment: .bottomTrailing) {
             Button(isPreviewing ? "Stop Preview" : "Play Preview", systemImage: isPreviewing ? "stop.fill" : "play.fill") {
                 togglePreview()
@@ -120,22 +136,31 @@ struct WallpaperInspectorView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-        .disabled(isCurrent)
+        // Still useful while it's only on some displays: it applies to all of them.
+        .disabled(isCurrent && manager.assignments.assignments == DisplayAssignments(allDisplays: item.url))
         .accessibilityHint(Text("Double-click or press Return to set as wallpaper"))
     }
 
     private func togglePreview() {
         guard !reduceMotion else { return }
-        isPreviewing.toggle()
         if isPreviewing {
-            let player = AVPlayer(url: item.url)
-            player.isMuted = true
-            previewPlayer = player
-            player.play()
+            stopPreview()
         } else {
-            previewPlayer?.pause()
-            previewPlayer = nil
+            let player = AVPlayer(url: WallpaperCacheManager.resolvedURL(for: item.url))
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            // At the wallpaper's ambient speed, like on the desktop.
+            player.defaultRate = Float(readability.wrappedValue.speed)
+            previewPlayer = player
+            isPreviewing = true
+            player.play()
         }
+    }
+
+    private func stopPreview() {
+        isPreviewing = false
+        previewPlayer?.pause()
+        previewPlayer = nil
     }
 
     private func loadPoster() async {
@@ -145,6 +170,7 @@ struct WallpaperInspectorView: View {
         generator.maximumSize = CGSize(width: 800, height: 500)
         if let cgImage = try? await generator.image(at: CMTime(seconds: 1, preferredTimescale: 1)).image {
             poster = NSImage(cgImage: cgImage, size: .zero)
+            posterImage = cgImage
         }
     }
 

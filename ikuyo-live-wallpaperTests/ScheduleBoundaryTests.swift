@@ -84,9 +84,10 @@ struct ScheduleBoundaryTests {
         // 06:00 local on the spring-forward day is still a valid, unambiguous wall-clock time.
         let expected = date("2026-03-08T06:00:00", timeZone: tz)
         #expect(next?.date == expected)
-        // The absolute gap is only 4 hours of wall-clock time, but 3 hours of elapsed real time,
-        // since the clock skipped an hour — proving this used calendar math, not a flat addition.
-        #expect(expected.timeIntervalSince(now) == 3 * 3600)
+        // 01:00 to 06:00 is 5 hours of wall-clock time, but only 4 hours of elapsed real time,
+        // since the clock skipped 02:00-02:59 — proving this used calendar math on wall-clock
+        // components, not a flat 5-hour `addingTimeInterval`.
+        #expect(expected.timeIntervalSince(now) == 4 * 3600)
     }
 
     @Test func activeSlotAfterFallBackStillResolvesToTheLatestStart() {

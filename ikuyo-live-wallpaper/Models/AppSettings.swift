@@ -15,6 +15,7 @@ final class AppSettings {
         static let pauseForFullScreenApps = "pauseForFullScreenApps"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let schedule = "schedule"
+        static let readabilityByWallpaper = "readabilityByWallpaper"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -76,6 +77,27 @@ final class AppSettings {
         }
     }
 
+    // MARK: Readability
+
+    /// Dim, blur, vignette and speed per wallpaper, keyed by `URL.absoluteString`. Wallpapers
+    /// with the default settings have no entry.
+    private(set) var readabilityByWallpaper: [String: ReadabilitySettings] {
+        didSet {
+            defaults.set(try? JSONEncoder().encode(readabilityByWallpaper), forKey: Key.readabilityByWallpaper)
+        }
+    }
+
+    func readability(for url: URL) -> ReadabilitySettings {
+        readabilityByWallpaper[url.absoluteString] ?? ReadabilitySettings()
+    }
+
+    func setReadability(_ readability: ReadabilitySettings, for url: URL) {
+        let value = readability.clamped
+        let key = url.absoluteString
+        guard readabilityByWallpaper[key] ?? ReadabilitySettings() != value else { return }
+        readabilityByWallpaper[key] = value.isDefault ? nil : value
+    }
+
     /// The pause rules for `PlaybackPolicy`. Screen sleep and a locked screen always pause.
     var pauseRules: PauseRules {
         PauseRules(
@@ -104,6 +126,8 @@ final class AppSettings {
         } else {
             schedule = Schedule()
         }
+        readabilityByWallpaper = defaults.data(forKey: Key.readabilityByWallpaper)
+            .flatMap { try? JSONDecoder().decode([String: ReadabilitySettings].self, from: $0) } ?? [:]
     }
 
     /// `lastWallpaperURL`, unless it is a local file that no longer exists (e.g. it was trashed).

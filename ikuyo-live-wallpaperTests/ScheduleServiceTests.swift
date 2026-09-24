@@ -26,6 +26,15 @@ private func makeLibrary(directory: URL) -> WallpaperLibrary {
     return WallpaperLibrary(directory: directory, defaults: makeDefaults(), catalogService: service)
 }
 
+/// Plain mutable storage a closure can capture directly, so `ScheduleServiceHarness.init` never
+/// captures `self` before it's fully initialized (Swift flags that as a definite-initialization
+/// error, since `self` would escape through the `ScheduleService` it hands off to).
+@MainActor
+private final class Box<Value> {
+    var value: Value
+    init(_ value: Value) { self.value = value }
+}
+
 @MainActor
 final class ScheduleServiceHarness {
     let manager = WallpaperManager(
@@ -38,24 +47,35 @@ final class ScheduleServiceHarness {
     let settings: AppSettings
     let boundaryTimer = FakeSchedulingTimer()
     let shuffleTimer = FakeSchedulingTimer()
-    var isDark = false
-    var currentDate: Date
+    private let isDarkBox: Box<Bool>
+    private let currentDateBox: Box<Date>
     let service: ScheduleService
+
+    var isDark: Bool {
+        get { isDarkBox.value }
+        set { isDarkBox.value = newValue }
+    }
+
+    var currentDate: Date {
+        get { currentDateBox.value }
+        set { currentDateBox.value = newValue }
+    }
 
     init(now: Date = Date()) {
         let dir = try! makeTempDirectory()
         library = makeLibrary(directory: dir)
         settings = AppSettings(defaults: makeDefaults())
-        currentDate = now
-        let boundaryTimer = boundaryTimer
-        let shuffleTimer = shuffleTimer
+        let isDarkBox = Box(false)
+        let currentDateBox = Box(now)
+        self.isDarkBox = isDarkBox
+        self.currentDateBox = currentDateBox
         service = ScheduleService(
             manager: manager,
             library: library,
             settings: settings,
             calendar: { .current },
-            now: { [weak self] in self?.currentDate ?? now },
-            isDarkAppearance: { [weak self] in self?.isDark ?? false },
+            now: { currentDateBox.value },
+            isDarkAppearance: { isDarkBox.value },
             boundaryTimer: boundaryTimer,
             shuffleTimer: shuffleTimer,
             shuffler: CollectionShuffler(randomElement: { $0.first }),
@@ -95,19 +115,32 @@ struct ScheduleServiceTests {
         #expect(harness.manager.isPaused)
     }
 
-    @Test func manualPickSuspendsTheScheduleUntilTheNextBoundary() {
+    /// `ScheduleService`'s manual-pick detection observes `manager.currentURL` the same way
+    /// `WallpaperManager.followPauseRules` observes settings: `withObservationTracking`'s
+    /// `onChange` fires before the new value is stored, so both hop to the next run-loop turn to
+    /// read it — hence waiting here, exactly like `PauseSettingsTests.settle`.
+    private func settle(until condition: () -> Bool) async {
+        for _ in 0..<100 where !condition() {
+            await Task.yield()
+        }
+    }
+
+    @Test func manualPickSuspendsTheScheduleUntilTheNextBoundary() async {
         let harness = ScheduleServiceHarness()
         harness.service.schedule.isEnabled = true
         harness.service.schedule.slots = [ScheduleSlot(name: "Only", startHour: 0, startMinute: 0, target: .wallpaper(a))]
         harness.boundaryTimer.fire()
+        await settle { harness.manager.currentURL == a }
         #expect(!harness.service.isSuspendedByManualPick)
 
         // The user picks something else entirely, not through the schedule.
         harness.manager.start(with: b)
+        await settle { harness.service.isSuspendedByManualPick }
         #expect(harness.service.isSuspendedByManualPick)
 
         // The next boundary lifts the suspension again by applying its own target.
         harness.boundaryTimer.fire()
+        await settle { !harness.service.isSuspendedByManualPick }
         #expect(!harness.service.isSuspendedByManualPick)
         #expect(harness.manager.currentURL == a)
     }

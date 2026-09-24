@@ -143,15 +143,36 @@ final class DesktopRestorer {
     /// Shows `frameURL` (a file in `framesDirectory`) as the desktop picture of every display
     /// whose original is safely recorded.
     func showFrame(_ frameURL: URL) {
+        showFrames(Dictionary(uniqueKeysWithValues: desktop.connectedDisplayIDs.map { ($0, frameURL) }))
+    }
+
+    /// Shows a still frame per display (display UUID → a file in `framesDirectory`) on every
+    /// display whose original is safely recorded. A connected display that is in neither
+    /// `frames` nor `untouched` no longer shows a wallpaper, so it gets its original back.
+    func showFrames(_ frames: [String: URL], leaving untouched: Set<String> = []) {
         saveOriginalDesktops()
-        let saved = savedDesktops
+        var saved = savedDesktops
+        var framesInUse = Set(frames.values.map(\.standardizedFileURL))
         for id in desktop.connectedDisplayIDs {
-            // Never replace a picture we couldn't record — we'd have no way to put it back.
             let current = desktop.desktopImageURL(for: id)
-            guard saved[id] != nil || current.map(isOwnFrame) == true else { continue }
-            try? desktop.setDesktopImageURL(frameURL, for: id, options: .fill)
+            let currentFrame = current.flatMap { isOwnFrame($0) ? $0.standardizedFileURL : nil }
+            if let frameURL = frames[id] {
+                // Never replace a picture we couldn't record — we'd have no way to put it back.
+                guard saved[id] != nil || currentFrame != nil else { continue }
+                try? desktop.setDesktopImageURL(frameURL, for: id, options: .fill)
+            } else if untouched.contains(id) {
+                if let currentFrame { framesInUse.insert(currentFrame) }
+            } else if let original = saved[id] {
+                do {
+                    try desktop.setDesktopImageURL(original.imageURL, for: id, options: original.options)
+                    saved[id] = nil
+                } catch {
+                    if let currentFrame { framesInUse.insert(currentFrame) }
+                }
+            }
         }
-        removeFrames(except: frameURL)
+        write(saved)
+        removeFrames(except: framesInUse)
     }
 
     /// Puts back every recorded original on displays that are connected. Entries for
@@ -196,10 +217,10 @@ final class DesktopRestorer {
         try? data.write(to: recordURL, options: .atomic)
     }
 
-    private func removeFrames(except keep: URL) {
+    private func removeFrames(except keep: Set<URL>) {
         let fm = FileManager.default
         guard let frames = try? fm.contentsOfDirectory(at: framesDirectory, includingPropertiesForKeys: nil) else { return }
-        for frame in frames where frame.standardizedFileURL != keep.standardizedFileURL {
+        for frame in frames where !keep.contains(frame.standardizedFileURL) {
             try? fm.removeItem(at: frame)
         }
     }
