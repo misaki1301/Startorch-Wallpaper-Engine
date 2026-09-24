@@ -33,10 +33,10 @@ struct ConfigurationView: View {
                     .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
             }
 
-            Text("ikuyo")
+            Text("StarTorch")
                 .font(.system(size: 28, weight: .bold))
 
-            Text("Live Wallpaper")
+            Text("Wallpaper Engine")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

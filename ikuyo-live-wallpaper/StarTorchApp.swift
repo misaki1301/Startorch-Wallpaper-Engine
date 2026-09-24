@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct ikuyo_live_wallpaperApp: App {
+struct StarTorchApp: App {
     @State private var wallpaperManager = WallpaperManager()
     @State private var cacheManager = WallpaperCacheManager()
     @State private var importedStore = ImportedWallpaperStore()
@@ -45,7 +45,7 @@ struct ikuyo_live_wallpaperApp: App {
             }
         }
 
-        MenuBarExtra("Ikuyo Live Wallpaper", systemImage: "photo.on.rectangle.angled") {
+        MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
             StatsMenuView(stats: statsService)
 
             Divider()
