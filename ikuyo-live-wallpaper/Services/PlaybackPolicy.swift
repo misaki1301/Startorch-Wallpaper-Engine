@@ -37,13 +37,13 @@ nonisolated enum PauseReason: String, CaseIterable, Codable, Sendable {
     /// A short, plain-language explanation for the UI.
     var label: String {
         switch self {
-        case .user: "Paused by you"
-        case .screenAsleep: "Display is asleep"
-        case .sessionInactive: "Screen is locked"
-        case .fullScreenApp: "A full-screen app is open"
-        case .desktopCovered: "Desktop is covered"
-        case .lowPowerMode: "Low Power Mode is on"
-        case .onBattery: "Running on battery"
+        case .user: String(localized: "pauseReason.user", defaultValue: "Paused by you")
+        case .screenAsleep: String(localized: "pauseReason.screenAsleep", defaultValue: "Display is asleep")
+        case .sessionInactive: String(localized: "pauseReason.sessionInactive", defaultValue: "Screen is locked")
+        case .fullScreenApp: String(localized: "pauseReason.fullScreenApp", defaultValue: "A full-screen app is open")
+        case .desktopCovered: String(localized: "pauseReason.desktopCovered", defaultValue: "Desktop is covered")
+        case .lowPowerMode: String(localized: "pauseReason.lowPowerMode", defaultValue: "Low Power Mode is on")
+        case .onBattery: String(localized: "pauseReason.onBattery", defaultValue: "Running on battery")
         }
     }
 }
