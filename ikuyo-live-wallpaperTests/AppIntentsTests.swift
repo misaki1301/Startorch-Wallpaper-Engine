@@ -36,6 +36,7 @@ private func makeLibraryWithTwoFavorites() throws -> WallpaperLibrary {
 /// Bridges the intents under test to fakes, and restores whatever was there before — the bridge
 /// is process-wide static state, so tests must never leak into each other or into the app.
 @MainActor
+@discardableResult
 private func withBridgedManager<T>(
     manager: WallpaperManager?,
     library: WallpaperLibrary? = nil,
@@ -63,7 +64,7 @@ struct AppIntentsTests {
     @Test func setWallpaperIntentStartsTheGivenWallpaper() async throws {
         let manager = makeManager()
         try await withBridgedManager(manager: manager) {
-            var intent = SetWallpaperIntent()
+            let intent = SetWallpaperIntent()
             intent.wallpaper = WallpaperEntity(item: WallpaperItem(url: video, name: "Rain"))
             _ = try await intent.perform()
             #expect(manager.currentURL == video)
