@@ -33,13 +33,12 @@ final class PlaybackEngine: WallpaperPlayback {
     }
 
     func play() {
-        guard !isPlaying, looper != nil else { return }
-        queuePlayer.play()
+        guard looper != nil else { return }
+        if queuePlayer.rate == 0 { queuePlayer.play() }
         isPlaying = true
     }
 
     func pause() {
-        guard isPlaying else { return }
         queuePlayer.pause()
         isPlaying = false
     }

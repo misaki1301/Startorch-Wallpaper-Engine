@@ -267,3 +267,36 @@ struct ScreenLayoutChangesTests {
         #expect(changes == ScreenLayoutChanges(resized: [2]))
     }
 }
+
+@MainActor
+struct PlaybackEngineTests {
+    /// Nothing is decoded: the file doesn't exist and no layer is attached.
+    private let missing = URL(filePath: "/tmp/StarTorchTests/missing.mp4")
+
+    @Test func startsPausedMutedAndLetsTheDisplaySleep() {
+        let engine = PlaybackEngine(url: missing)
+        #expect(!engine.isPlaying)
+        #expect(engine.player.isMuted)
+        #expect(!engine.player.preventsDisplaySleepDuringVideoPlayback)
+    }
+
+    @Test func playAndPauseAreIdempotent() {
+        let engine = PlaybackEngine(url: missing)
+        engine.play()
+        engine.play()
+        #expect(engine.isPlaying)
+        engine.pause()
+        engine.pause()
+        #expect(!engine.isPlaying)
+        #expect(engine.player.rate == 0)
+    }
+
+    @Test func aTornDownEngineStaysStopped() {
+        let engine = PlaybackEngine(url: missing)
+        engine.play()
+        engine.tearDown()
+        engine.play()
+        #expect(!engine.isPlaying)
+        #expect(engine.player.rate == 0)
+    }
+}
