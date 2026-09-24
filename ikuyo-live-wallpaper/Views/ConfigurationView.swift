@@ -4,6 +4,7 @@ struct ConfigurationView: View {
     @State private var cacheSize: UInt64 = 0
     @Environment(WallpaperCacheManager.self) private var cacheManager
     @Environment(AppSettings.self) private var settings
+    @State private var launchAtLogin = LaunchAtLogin()
 
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
 
@@ -13,6 +14,8 @@ struct ConfigurationView: View {
                 headerSection
                 Divider().padding(.horizontal)
                 dockSection
+                Divider().padding(.horizontal)
+                startupSection
                 Divider().padding(.horizontal)
                 storageSection
                 Divider().padding(.horizontal)
@@ -62,6 +65,63 @@ struct ConfigurationView: View {
             }
         }
         .padding()
+    }
+
+    private var startupSection: some View {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Startup")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Toggle(isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Launch at Login")
+                        .font(.body)
+                    Text("Open StarTorch automatically when you log in")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+
+            if launchAtLogin.needsApproval {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Allow StarTorch in Login Items to finish turning this on.")
+                        .font(.caption)
+                    Button("Open Login Items…") { launchAtLogin.openSystemSettings() }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
+            }
+            if let error = launchAtLogin.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Toggle(isOn: $settings.resumeWallpaperOnLaunch) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Resume Wallpaper on Launch")
+                        .font(.body)
+                    Text("Start the last wallpaper again if it was playing when StarTorch quit")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+        }
+        .padding()
+        .onAppear { launchAtLogin.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // The user may have changed it in System Settings meanwhile.
+            launchAtLogin.refresh()
+        }
     }
 
     private var storageSection: some View {

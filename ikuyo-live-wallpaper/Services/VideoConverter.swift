@@ -48,28 +48,71 @@ nonisolated enum VideoConverter {
         )
     }
 
+    /// Frame rate used when a track reports none (`nominalFrameRate` is 0 for some
+    /// variable-frame-rate files), which would otherwise produce an invalid `CMTime`.
+    static let fallbackFrameRate: Float = 30
+
+    static func effectiveFrameRate(_ nominalFrameRate: Float) -> Float {
+        nominalFrameRate.isFinite && nominalFrameRate > 0 ? nominalFrameRate : fallbackFrameRate
+    }
+
+    /// The upright size of a track and the transform that draws it there. Rotated sources
+    /// (e.g. portrait phone video) store landscape pixels plus a rotation in `preferredTransform`.
+    static func orientedGeometry(
+        naturalSize: CGSize,
+        preferredTransform: CGAffineTransform
+    ) -> (renderSize: CGSize, transform: CGAffineTransform) {
+        let bounds = CGRect(origin: .zero, size: naturalSize).applying(preferredTransform)
+        let transform = preferredTransform.concatenating(
+            CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
+        )
+        let renderSize = CGSize(width: bounds.width.rounded(), height: bounds.height.rounded())
+        return (renderSize, transform)
+    }
+
+    /// Transcodes `source` to HEVC at `output`. Cancelling the calling task stops the
+    /// reader and writer; on any failure or cancellation the partial `output` is deleted.
     static func transcodeToHEVC(
         source: URL,
         output: URL,
         progress: @escaping @MainActor @Sendable (Double) -> Void
     ) async throws {
+        do {
+            try await performTranscode(source: source, output: output, progress: progress)
+        } catch {
+            try? FileManager.default.removeItem(at: output)
+            throw error
+        }
+    }
+
+    private static func performTranscode(
+        source: URL,
+        output: URL,
+        progress: @escaping @MainActor @Sendable (Double) -> Void
+    ) async throws {
         let asset = AVURLAsset(url: source)
-        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw VideoConverterError.noVideoTrack
         }
         let duration = try await asset.load(.duration)
-        let (naturalSize, dataRate, frameRate) = try await videoTrack.load(
-            .naturalSize, .estimatedDataRate, .nominalFrameRate
+        let (naturalSize, preferredTransform, dataRate, nominalFrameRate) = try await videoTrack.load(
+            .naturalSize, .preferredTransform, .estimatedDataRate, .nominalFrameRate
         )
+        try Task.checkCancellation()
 
+        let frameRate = effectiveFrameRate(nominalFrameRate)
+        let (renderSize, transform) = orientedGeometry(
+            naturalSize: naturalSize,
+            preferredTransform: preferredTransform
+        )
         let sourceBitrate = dataRate > 0 ? dataRate : 5_000_000
         let hevcBitrate = Double(sourceBitrate) * 0.5
 
         let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
         let outputSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: naturalSize.width,
-            AVVideoHeightKey: naturalSize.height,
+            AVVideoWidthKey: renderSize.width,
+            AVVideoHeightKey: renderSize.height,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: Int(hevcBitrate),
                 AVVideoExpectedSourceFrameRateKey: frameRate,
@@ -84,15 +127,16 @@ nonisolated enum VideoConverter {
         let reader = try AVAssetReader(asset: asset)
 
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.frameDuration = CMTime(value: 1, timescale: Int32(frameRate))
-        videoComposition.renderSize = naturalSize
+        videoComposition.frameDuration = CMTime(seconds: 1 / Double(frameRate), preferredTimescale: 60_000)
+        videoComposition.renderSize = renderSize
 
-        let passThroughInstruction = AVMutableVideoCompositionInstruction()
-        passThroughInstruction.timeRange = CMTimeRange(start: .zero, duration: duration)
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-        passThroughInstruction.layerInstructions = [layerInstruction]
-        videoComposition.instructions = [passThroughInstruction]
+        layerInstruction.setTransform(transform, at: .zero)
+        instruction.layerInstructions = [layerInstruction]
+        videoComposition.instructions = [instruction]
 
         let readerOutput = AVAssetReaderVideoCompositionOutput(
             videoTracks: [videoTrack],
@@ -106,6 +150,7 @@ nonisolated enum VideoConverter {
             throw VideoConverterError.cannotRead(reader.error)
         }
         guard writer.startWriting() else {
+            reader.cancelReading()
             throw VideoConverterError.cannotWrite(writer.error)
         }
         writer.startSession(atSourceTime: .zero)
@@ -118,7 +163,11 @@ nonisolated enum VideoConverter {
             totalSeconds: duration.seconds,
             progress: progress
         )
-        try await session.run()
+        try await withTaskCancellationHandler {
+            try await session.run()
+        } onCancel: {
+            session.cancel()
+        }
     }
 
     private static func fourCCToString(_ fourCC: FourCharCode) -> String {
@@ -139,7 +188,9 @@ private nonisolated final class TranscodeSession: @unchecked Sendable {
     private let progress: @MainActor @Sendable (Double) -> Void
     private let queue = DispatchQueue(label: "VideoConverter.transcode", qos: .userInitiated)
 
+    private var continuation: CheckedContinuation<Void, any Error>?
     private var isFinished = false
+    private var isCancelled = false
     private var lastProgress: Double = 0
 
     init(
@@ -160,38 +211,88 @@ private nonisolated final class TranscodeSession: @unchecked Sendable {
 
     func run() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            writerInput.requestMediaDataWhenReady(on: queue) { [self] in
-                pump(continuation)
+            queue.async { [self] in
+                self.continuation = continuation
+                // `cancel()` may have run before we got here.
+                if isCancelled {
+                    abort(with: CancellationError())
+                    return
+                }
+                writerInput.requestMediaDataWhenReady(on: queue) { [self] in
+                    pump()
+                }
             }
         }
     }
 
-    private func pump(_ continuation: CheckedContinuation<Void, any Error>) {
+    func cancel() {
+        queue.async { [self] in
+            isCancelled = true
+            // Once finishing has started the writer can't be cancelled; its
+            // completion handler reports the cancellation instead.
+            guard !isFinished else { return }
+            abort(with: CancellationError())
+        }
+    }
+
+    private func pump() {
         guard !isFinished else { return }
         while writerInput.isReadyForMoreMediaData {
             guard let sampleBuffer = readerOutput.copyNextSampleBuffer() else {
-                writerInput.markAsFinished()
-                isFinished = true
-                writer.finishWriting { [self] in
-                    if reader.status == .completed {
-                        continuation.resume()
-                    } else {
-                        continuation.resume(throwing: VideoConverterError.transcodingFailed(reader.error))
-                    }
-                }
+                finish()
                 return
             }
 
-            writerInput.append(sampleBuffer)
+            guard writerInput.append(sampleBuffer) else {
+                abort(with: VideoConverterError.transcodingFailed(writer.error))
+                return
+            }
 
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            let pct = min(pts.seconds / totalSeconds, 1)
+            let pct = totalSeconds > 0 ? min(max(pts.seconds / totalSeconds, 0), 1) : 0
             if pct - lastProgress >= 0.05 {
                 lastProgress = pct
                 let progress = progress
                 Task { @MainActor in progress(pct) }
             }
         }
+    }
+
+    /// The reader ran out of samples: either the whole file was read or reading failed.
+    private func finish() {
+        isFinished = true
+        guard reader.status == .completed else {
+            abort(with: VideoConverterError.transcodingFailed(reader.error))
+            return
+        }
+        writerInput.markAsFinished()
+        writer.finishWriting { [self] in
+            queue.async { [self] in
+                if isCancelled {
+                    resume(with: .failure(CancellationError()))
+                } else if writer.status == .completed {
+                    resume(with: .success(()))
+                } else {
+                    resume(with: .failure(VideoConverterError.transcodingFailed(writer.error)))
+                }
+            }
+        }
+    }
+
+    private func abort(with error: any Error) {
+        isFinished = true
+        reader.cancelReading()
+        if writer.status == .writing {
+            writer.cancelWriting()
+        }
+        resume(with: .failure(error))
+    }
+
+    /// Resumes the continuation at most once.
+    private func resume(with result: Result<Void, any Error>) {
+        guard let continuation else { return }
+        self.continuation = nil
+        continuation.resume(with: result)
     }
 }
 
