@@ -3,12 +3,12 @@ import SwiftData
 
 @main
 struct StarTorchApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var wallpaperManager: WallpaperManager
     @State private var cacheManager: WallpaperCacheManager
     @State private var library: WallpaperLibrary
     @State private var importedStore = ImportedWallpaperStore()
     @State private var settings: AppSettings
-    @State private var showSplash = true
     private let statsService = SystemStatsService()
 
     init() {
@@ -38,34 +38,27 @@ struct StarTorchApp: App {
     }
 
     var body: some Scene {
-        // A single window, so "Open StarTorch…" brings it back instead of stacking copies.
+        // A single window, so "Open StarTorch…" brings it back instead of stacking copies. The
+        // system restores its frame; there's no forced size or splash on top of that.
         Window("StarTorch", id: MainWindow.id) {
-            ZStack {
-                if showSplash {
-                    SplashAnimationView()
-                        .onAppear {
-                            statsService.start()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation(.easeInOut(duration: 0.5)) {
-                                    showSplash = false
-                                }
-                            }
-                        }
-                } else {
-                    ContentView()
-                }
-            }
-            .environment(wallpaperManager)
-            .environment(cacheManager)
-            .environment(importedStore)
-            .environment(settings)
-            .environment(library)
+            ContentView()
+                .environment(wallpaperManager)
+                .environment(cacheManager)
+                .environment(importedStore)
+                .environment(settings)
+                .environment(library)
         }
         .defaultSize(width: 900, height: 600)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About StarTorch") {
+                    AboutPanel.show()
+                }
+            }
+        }
 
         Settings {
-            ConfigurationView()
-                .frame(width: 440, height: 560)
+            SettingsView()
                 .environment(cacheManager)
                 .environment(settings)
         }
@@ -144,5 +137,9 @@ struct StatsMenuView: View {
             .padding(.horizontal, 12)
         }
         .padding(.vertical, 4)
+        // The menu bar extra's content view stays alive even while the menu is closed, so without
+        // this the 2-second poll would run for the app's entire lifetime for no reason.
+        .onAppear { stats.start() }
+        .onDisappear { stats.stop() }
     }
 }
