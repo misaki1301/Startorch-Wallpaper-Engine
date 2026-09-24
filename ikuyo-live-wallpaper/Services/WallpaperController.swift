@@ -3,39 +3,57 @@ import AVFoundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Shows a player on the desktop of every display. The manager talks to this protocol so its
-/// logic can be tested without windows or the real desktop picture.
+/// One display's wallpaper: which video and the player that decodes it. Displays showing the
+/// same wallpaper share the player.
+struct PresentedWallpaper {
+    let url: URL
+    /// The local copy when there is one; used for the still frame.
+    let playbackURL: URL
+    let player: AVPlayer
+}
+
+/// Shows wallpapers on the desktops of the connected displays. The manager talks to this
+/// protocol so its logic can be tested without windows or the real desktop picture.
 protocol WallpaperPresenting: AnyObject {
-    /// The desktop windows currently on screen, one per display.
-    var windows: [NSWindow] { get }
-    /// Called after displays were added, removed or rearranged and `windows` changed.
-    var onWindowsChange: (() -> Void)? { get set }
-    /// Shows `player` on every display, reusing existing windows, and sets the first frame of
-    /// `playbackURL` as the desktop picture once `url` changes.
-    func present(_ player: AVPlayer, for url: URL, playbackURL: URL)
-    /// Removes the windows but leaves the desktop picture alone, so switching wallpapers
-    /// doesn't flash the original in between.
-    func dismiss()
+    /// UUIDs of the connected displays, the main display first.
+    var connectedDisplays: [String] { get }
+    /// The desktop windows currently on screen, keyed by display UUID.
+    var windowsByDisplay: [String: NSWindow] { get }
+    /// Called after displays were connected, disconnected or rearranged, once they settled.
+    /// The manager answers with a new `present(_:completion:)`.
+    var onDisplaysChange: (() -> Void)? { get set }
+    /// Shows `layout` (display UUID → wallpaper), reusing existing windows. Displays missing from
+    /// the layout lose their window. Each wallpaper's first frame becomes the desktop picture of
+    /// its displays. `completion` runs once players no longer in the layout can be torn down.
+    func present(_ layout: [String: PresentedWallpaper], completion: @escaping () -> Void)
+    /// Removes the windows but leaves the desktop picture alone, so a restart doesn't flash the
+    /// original in between. `completion` runs once the windows are gone.
+    func dismiss(animated: Bool, completion: @escaping () -> Void)
     /// Gives every display its original desktop picture back.
     func restoreOriginalDesktops()
 }
 
-/// Which displays gained, lost or moved a desktop window.
+extension WallpaperPresenting {
+    var windows: [NSWindow] { Array(windowsByDisplay.values) }
+}
+
+/// Which displays (by UUID) gained, lost or moved a desktop window.
 nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
-    var added: Set<CGDirectDisplayID> = []
-    var removed: Set<CGDirectDisplayID> = []
-    var resized: Set<CGDirectDisplayID> = []
+    var added: Set<String> = []
+    var removed: Set<String> = []
+    var resized: Set<String> = []
 
     var isEmpty: Bool { added.isEmpty && removed.isEmpty && resized.isEmpty }
 
-    init(added: Set<CGDirectDisplayID> = [], removed: Set<CGDirectDisplayID> = [], resized: Set<CGDirectDisplayID> = []) {
+    init(added: Set<String> = [], removed: Set<String> = [], resized: Set<String> = []) {
         self.added = added
         self.removed = removed
         self.resized = resized
     }
 
-    /// Compares the frames of the windows we have with the frames of the connected displays.
-    init(windows: [CGDirectDisplayID: CGRect], screens: [CGDirectDisplayID: CGRect]) {
+    /// Compares the frames of the windows we have with the frames of the displays that should
+    /// have one.
+    init(windows: [String: CGRect], screens: [String: CGRect]) {
         added = Set(screens.keys).subtracting(windows.keys)
         removed = Set(windows.keys).subtracting(screens.keys)
         resized = Set(screens.compactMap { id, frame in
@@ -44,29 +62,45 @@ nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
     }
 }
 
-/// Owns the borderless desktop-level window on each display and the still frame used as the
-/// desktop picture. Display changes update, add or remove windows in place; the player keeps
-/// running.
+/// Owns the borderless desktop-level window on each display and the still frames used as desktop
+/// pictures. Display changes update, add or remove windows in place; players keep running.
 final class WallpaperController: WallpaperPresenting {
-    private struct DesktopWindow {
+    private final class DesktopWindow {
         let window: NSWindow
         let playerLayer: AVPlayerLayer
+        var url: URL
+
+        init(window: NSWindow, playerLayer: AVPlayerLayer, url: URL) {
+            self.window = window
+            self.playerLayer = playerLayer
+            self.url = url
+        }
+
+        func close() {
+            playerLayer.player = nil
+            window.contentView = nil
+            window.orderOut(nil)
+        }
     }
 
-    var onWindowsChange: (() -> Void)?
+    var onDisplaysChange: (() -> Void)?
 
     private let restorer: DesktopRestorer
-    private var desktopWindows: [CGDirectDisplayID: DesktopWindow] = [:]
-    private var player: AVPlayer?
-    private var currentURL: URL?
-    /// The still frame of the current wallpaper, once written.
-    private var frameURL: URL?
-    private var frameTask: Task<Void, Never>?
+    private var desktopWindows: [String: DesktopWindow] = [:]
+    private var layout: [String: PresentedWallpaper] = [:]
+    /// Wallpaper URL → its still frame file, or nil when extracting it failed.
+    private var frames: [URL: URL?] = [:]
+    private var frameTasks: [URL: Task<Void, Never>] = [:]
+    private var shownFrames: [String: URL]?
     private var screenChangeTask: Task<Void, Never>?
     private var screenObserver: (any NSObjectProtocol)?
 
-    var windows: [NSWindow] {
-        desktopWindows.values.map(\.window)
+    var connectedDisplays: [String] {
+        NSScreen.screens.compactMap(\.displayUUID)
+    }
+
+    var windowsByDisplay: [String: NSWindow] {
+        desktopWindows.mapValues(\.window)
     }
 
     init(restorer: DesktopRestorer) {
@@ -80,37 +114,52 @@ final class WallpaperController: WallpaperPresenting {
         }
     }
 
-    func present(_ player: AVPlayer, for url: URL, playbackURL: URL) {
-        self.player = player
-        for desktopWindow in desktopWindows.values {
-            desktopWindow.playerLayer.player = player
+    func present(_ layout: [String: PresentedWallpaper], completion: @escaping () -> Void) {
+        self.layout = layout
+        var screens: [String: NSScreen] = [:]
+        for screen in NSScreen.screens {
+            if let id = screen.displayUUID { screens[id] = screen }
         }
-        updateWindowsForScreens()
 
-        if url != currentURL {
-            currentURL = url
-            frameURL = nil
-            showStaticFrame(of: playbackURL, for: url)
+        let targets = screens.filter { layout[$0.key] != nil }
+        let changes = ScreenLayoutChanges(
+            windows: desktopWindows.mapValues { $0.window.frame },
+            screens: targets.mapValues(\.frame)
+        )
+        for id in changes.removed {
+            desktopWindows.removeValue(forKey: id)?.close()
         }
+        for id in changes.resized {
+            guard let frame = targets[id]?.frame else { continue }
+            desktopWindows[id]?.window.setFrame(frame, display: true)
+        }
+        for (id, wallpaper) in layout {
+            if let desktopWindow = desktopWindows[id] {
+                if desktopWindow.playerLayer.player !== wallpaper.player {
+                    desktopWindow.playerLayer.player = wallpaper.player
+                }
+                desktopWindow.url = wallpaper.url
+            } else if let screen = targets[id] {
+                desktopWindows[id] = makeDesktopWindow(on: screen, showing: wallpaper)
+            }
+        }
+
+        updateStillFrames()
+        completion()
     }
 
-    func dismiss() {
+    func dismiss(animated: Bool, completion: @escaping () -> Void) {
         screenChangeTask?.cancel()
         screenChangeTask = nil
-        frameTask?.cancel()
-        frameTask = nil
+        for task in frameTasks.values { task.cancel() }
+        frameTasks.removeAll()
+        frames.removeAll()
+        shownFrames = nil
+        layout.removeAll()
 
-        for desktopWindow in desktopWindows.values {
-            desktopWindow.playerLayer.player = nil
-            desktopWindow.window.contentView = nil
-            desktopWindow.window.orderOut(nil)
-        }
-        let hadWindows = !desktopWindows.isEmpty
+        for desktopWindow in desktopWindows.values { desktopWindow.close() }
         desktopWindows.removeAll()
-        player = nil
-        currentURL = nil
-        frameURL = nil
-        if hadWindows { onWindowsChange?() }
+        completion()
     }
 
     func restoreOriginalDesktops() {
@@ -119,57 +168,22 @@ final class WallpaperController: WallpaperPresenting {
 
     // MARK: - Screens
 
+    /// Always forwarded, even with nothing on screen: a reconnected display may be the only one
+    /// with a wallpaper assigned.
     private func screenParametersDidChange() {
-        guard player != nil else { return }
         // Displays report several changes while they settle.
         screenChangeTask?.cancel()
         screenChangeTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
-            self?.updateWindowsForScreens()
+            self?.onDisplaysChange?()
         }
     }
 
-    /// Adds a window for each new display, moves or resizes the ones that changed and removes
-    /// the ones whose display is gone. The player is untouched, so playback never restarts.
-    private func updateWindowsForScreens() {
-        guard let player else { return }
-        var screens: [CGDirectDisplayID: NSScreen] = [:]
-        for screen in NSScreen.screens {
-            if let id = screen.displayID { screens[id] = screen }
-        }
-        let changes = ScreenLayoutChanges(
-            windows: desktopWindows.mapValues { $0.window.frame },
-            screens: screens.mapValues(\.frame)
-        )
-        guard !changes.isEmpty else { return }
-
-        for id in changes.removed {
-            guard let desktopWindow = desktopWindows.removeValue(forKey: id) else { continue }
-            desktopWindow.playerLayer.player = nil
-            desktopWindow.window.contentView = nil
-            desktopWindow.window.orderOut(nil)
-        }
-        for id in changes.resized {
-            guard let frame = screens[id]?.frame else { continue }
-            desktopWindows[id]?.window.setFrame(frame, display: true)
-        }
-        for id in changes.added {
-            guard let screen = screens[id] else { continue }
-            desktopWindows[id] = makeDesktopWindow(on: screen, player: player)
-        }
-
-        // A new display gets the still frame too; its own picture is recorded first.
-        if !changes.added.isEmpty, let frameURL {
-            restorer.showFrame(frameURL)
-        }
-        onWindowsChange?()
-    }
-
-    private func makeDesktopWindow(on screen: NSScreen, player: AVPlayer) -> DesktopWindow {
+    private func makeDesktopWindow(on screen: NSScreen, showing wallpaper: PresentedWallpaper) -> DesktopWindow {
         let viewRect = CGRect(origin: .zero, size: screen.frame.size)
 
-        let playerLayer = AVPlayerLayer(player: player)
+        let playerLayer = AVPlayerLayer(player: wallpaper.player)
         playerLayer.videoGravity = .resizeAspectFill
         playerLayer.frame = viewRect
         // Follows the window when the display's resolution changes.
@@ -195,32 +209,53 @@ final class WallpaperController: WallpaperPresenting {
         window.contentView = contentView
         window.orderFrontRegardless()
 
-        return DesktopWindow(window: window, playerLayer: playerLayer)
+        return DesktopWindow(window: window, playerLayer: playerLayer, url: wallpaper.url)
     }
 
-    // MARK: - Static Frame
+    // MARK: - Still Frames
 
-    /// Also sets the first frame as the desktop picture, so Mission Control, Spaces transitions
-    /// and the moment before our windows appear match the video. The original picture is
-    /// recorded first and restored on stop.
-    private func showStaticFrame(of playbackURL: URL, for url: URL) {
-        frameTask?.cancel()
-        let framesDirectory = restorer.framesDirectory
+    /// Makes each wallpaper's first frame the desktop picture of its displays, so Mission
+    /// Control, Spaces transitions and the moment before our windows appear match the video.
+    /// Originals are recorded first and restored on stop. Waits until every wallpaper in the
+    /// layout has its frame, so a display never briefly gets its original back.
+    private func updateStillFrames() {
+        let urls = Set(layout.values.map(\.url))
+        for (url, task) in frameTasks where !urls.contains(url) {
+            task.cancel()
+            frameTasks[url] = nil
+        }
+        frames = frames.filter { urls.contains($0.key) }
+
+        for wallpaper in layout.values where frames[wallpaper.url] == nil && frameTasks[wallpaper.url] == nil {
+            extractStillFrame(of: wallpaper)
+        }
+        guard urls.allSatisfy({ frames[$0] != nil }) else { return }
+
+        var shown: [String: URL] = [:]
+        var untouched: Set<String> = []
+        for (id, wallpaper) in layout {
+            if let frame = frames[wallpaper.url] ?? nil { shown[id] = frame } else { untouched.insert(id) }
+        }
+        guard shown != shownFrames else { return }
+        shownFrames = shown
+        restorer.showFrames(shown, leaving: untouched)
+    }
+
+    private func extractStillFrame(of wallpaper: PresentedWallpaper) {
+        let url = wallpaper.url
+        let destination = restorer.framesDirectory.appending(path: WallpaperCacheManager.cacheKey(for: url) + ".png")
         let targetSize = NSScreen.screens
             .map { CGSize(width: $0.frame.width * $0.backingScaleFactor, height: $0.frame.height * $0.backingScaleFactor) }
             .max { $0.width * $0.height < $1.width * $1.height }
             ?? CGSize(width: 1920, height: 1080)
 
-        frameTask = Task { [weak self] in
-            let frameURL = await Self.writeFirstFrame(
-                of: playbackURL,
-                maximumSize: targetSize,
-                to: framesDirectory.appending(path: WallpaperCacheManager.cacheKey(for: url) + ".png")
-            )
+        frameTasks[url] = Task { [weak self, playbackURL = wallpaper.playbackURL] in
+            let frameURL = await Self.writeFirstFrame(of: playbackURL, maximumSize: targetSize, to: destination)
             // The wallpaper may have been stopped or switched while the frame was extracted.
-            guard let self, let frameURL, !Task.isCancelled, self.currentURL == url else { return }
-            self.frameURL = frameURL
-            self.restorer.showFrame(frameURL)
+            guard let self, !Task.isCancelled, self.frameTasks[url] != nil else { return }
+            self.frameTasks[url] = nil
+            self.frames[url] = .some(frameURL)
+            self.updateStillFrames()
         }
     }
 

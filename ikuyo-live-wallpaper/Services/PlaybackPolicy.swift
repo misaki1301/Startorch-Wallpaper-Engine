@@ -12,6 +12,25 @@ nonisolated struct PlaybackSignals: Equatable, Sendable {
     var isOnBattery = false
     /// Every display is covered by a full-screen app.
     var hasFullScreenApp = false
+    /// Displays (by UUID) whose wallpaper window is at least partly visible, when known.
+    var visibleDisplays: Set<String>?
+    /// Displays (by UUID) covered by a full-screen app, when known.
+    var fullScreenDisplays: Set<String>?
+
+    /// The signals as seen by a wallpaper shown only on `displays`: it counts as visible if any
+    /// of its displays is, and as hidden by full-screen apps only if all of them are covered.
+    /// Without per-display information the global values are kept.
+    func restricted(to displays: Set<String>) -> PlaybackSignals {
+        guard !displays.isEmpty else { return self }
+        var signals = self
+        if let visibleDisplays {
+            signals.isDesktopVisible = !displays.isDisjoint(with: visibleDisplays)
+        }
+        if let fullScreenDisplays {
+            signals.hasFullScreenApp = displays.isSubset(of: fullScreenDisplays)
+        }
+        return signals
+    }
 }
 
 /// The pause rules the user can turn on or off. Screen sleep and a locked or inactive

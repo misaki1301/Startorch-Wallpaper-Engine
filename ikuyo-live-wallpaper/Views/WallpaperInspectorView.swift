@@ -15,7 +15,7 @@ struct WallpaperInspectorView: View {
     @State private var metadata: VideoMetadata?
 
     private var isCurrent: Bool {
-        manager.isActive && manager.currentURL == item.url
+        manager.isShowing(item.url)
     }
 
     var body: some View {
@@ -120,7 +120,8 @@ struct WallpaperInspectorView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-        .disabled(isCurrent)
+        // Still useful while it's only on some displays: it applies to all of them.
+        .disabled(isCurrent && manager.assignments.assignments == DisplayAssignments(allDisplays: item.url))
         .accessibilityHint(Text("Double-click or press Return to set as wallpaper"))
     }
 

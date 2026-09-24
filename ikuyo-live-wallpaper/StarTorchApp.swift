@@ -31,7 +31,8 @@ struct StarTorchApp: App {
                 // If the last run crashed or was killed, its desktop pictures were never restored.
                 wallpaperManager.recoverDesktopFromPreviousSession()
                 if let url = settings.wallpaperToResume() {
-                    wallpaperManager.start(with: url)
+                    // Brings back each display's own wallpaper; `url` covers older installs.
+                    wallpaperManager.resumeLastSession(fallback: url)
                 }
             }
         }
