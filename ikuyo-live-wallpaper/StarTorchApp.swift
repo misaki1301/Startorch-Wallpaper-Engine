@@ -4,14 +4,20 @@ import SwiftData
 @main
 struct StarTorchApp: App {
     @State private var wallpaperManager = WallpaperManager()
-    @State private var cacheManager = WallpaperCacheManager()
+    @State private var cacheManager: WallpaperCacheManager
+    @State private var library: WallpaperLibrary
     @State private var importedStore = ImportedWallpaperStore()
+    @State private var settings: AppSettings
     @State private var showSplash = true
     private let statsService = SystemStatsService()
 
     init() {
-        let showInDock = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
-        NSApplication.shared.setActivationPolicy(showInDock ? .regular : .accessory)
+        let settings = AppSettings()
+        let cacheManager = WallpaperCacheManager()
+        _settings = State(initialValue: settings)
+        _cacheManager = State(initialValue: cacheManager)
+        _library = State(initialValue: WallpaperLibrary(cacheManager: cacheManager))
+        NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
     }
 
     var body: some Scene {
@@ -22,6 +28,8 @@ struct StarTorchApp: App {
                         .environment(wallpaperManager)
                         .environment(cacheManager)
                         .environment(importedStore)
+                        .environment(settings)
+                        .environment(library)
                         .onAppear {
                             hideTitleBar(true)
                             statsService.start()
@@ -37,12 +45,15 @@ struct StarTorchApp: App {
                         .environment(wallpaperManager)
                         .environment(cacheManager)
                         .environment(importedStore)
+                        .environment(settings)
+                        .environment(library)
                         .onAppear {
                             hideTitleBar(false)
                             resizeWindowForContent()
                         }
                 }
             }
+            .task { await library.refreshCatalog() }
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
@@ -54,7 +65,7 @@ struct StarTorchApp: App {
                 if wallpaperManager.isActive {
                     wallpaperManager.stop()
                 } else {
-                    let url = UserDefaults.standard.url(forKey: "wallpaperURL")
+                    let url = settings.lastWallpaperURL
                         ?? Bundle.main.url(forResource: "test", withExtension: "mp4")
                         ?? URL(string: "about:blank")!
                     wallpaperManager.start(with: url)

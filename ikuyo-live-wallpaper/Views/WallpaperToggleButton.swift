@@ -22,6 +22,6 @@ struct WallpaperToggleButton: View {
 }
 
 #Preview {
-    WallpaperToggleButton(videoURL: URL(string: "https://cdn.donmai.us/original/44/2a/442a58406a379375c3ff4c8d676b8c19.mp4")!)
+    WallpaperToggleButton(videoURL: URL(string: "https://example.com/sample.mp4")!)
         .environment(WallpaperManager())
 }
