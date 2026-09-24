@@ -19,6 +19,8 @@ final class WallpaperManager {
     /// A wallpaper runs and is actually playing.
     var isPlaying: Bool { isActive && pauseReason == nil }
 
+    /// Played and paused time per day, for the energy summary.
+    @ObservationIgnored let stats: PlaybackStats
     @ObservationIgnored private let presenter: any WallpaperPresenting
     @ObservationIgnored private let signalSource: any PlaybackSignalSource
     @ObservationIgnored private let makeEngine: (URL) -> any WallpaperPlayback
@@ -35,11 +37,16 @@ final class WallpaperManager {
         settings: AppSettings? = nil,
         presenter: (any WallpaperPresenting)? = nil,
         signals: (any PlaybackSignalSource)? = nil,
+        stats: PlaybackStats? = nil,
         makeEngine: @escaping (URL) -> any WallpaperPlayback = { PlaybackEngine(url: $0) }
     ) {
         self.presenter = presenter ?? WallpaperController(restorer: restorer)
         self.signalSource = signals ?? (AppEnvironment.isHostingTests ? FixedSignalSource() : SystemSignalMonitor())
         self.makeEngine = makeEngine
+        // A test run must never write to the real statistics.
+        self.stats = stats ?? (AppEnvironment.isHostingTests
+            ? PlaybackStats(fileURL: .temporaryDirectory.appending(path: "playback-stats-\(UUID().uuidString).json"))
+            : PlaybackStats())
         self.settings = settings
 
         signalSource.onChange = { [weak self] _ in self?.applyPolicy() }
@@ -149,13 +156,22 @@ final class WallpaperManager {
         applyPolicy()
     }
 
-    /// Plays or pauses the engine to match the policy for the current signals.
+    /// Plays or pauses the engine to match the policy for the current signals, and counts the
+    /// time spent in the previous state.
     private func applyPolicy() {
         var reason: PauseReason?
+        var state: PlaybackState?
         if isActive, let engine {
             reason = policy.decision(for: signalSource.signals, userPaused: isPaused).pauseReason
-            if reason == nil { engine.play() } else { engine.pause() }
+            if let reason {
+                engine.pause()
+                state = .paused(reason)
+            } else {
+                engine.play()
+                state = .playing
+            }
         }
         if pauseReason != reason { pauseReason = reason }
+        stats.record(state)
     }
 }
