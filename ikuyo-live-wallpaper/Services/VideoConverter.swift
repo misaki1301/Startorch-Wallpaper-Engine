@@ -1,13 +1,39 @@
 import AVFoundation
+import ImageIO
 import UniformTypeIdentifiers
 
 nonisolated struct VideoMetadata: Sendable {
     let codec: String
+    /// The stored pixel size. Rotated sources (portrait phone video) report landscape here;
+    /// see `displaySize` for what's actually seen.
     let resolution: CGSize
     let fileSize: UInt64
     let duration: CMTime
     let bitrate: Float
     let estimatedHEVCSize: UInt64
+    /// The upright size, after the track's `preferredTransform`.
+    var displaySize: CGSize = .zero
+    /// `nominalFrameRate`, 0 when the file doesn't say.
+    var frameRate: Float = 0
+}
+
+/// What the import studio asks for. The default is a plain re-encode of the whole clip.
+nonisolated struct ImportEdit: Equatable, Sendable {
+    /// Source time range to keep; `nil` keeps everything.
+    var trim: CMTimeRange?
+    /// Requested loop-seam crossfade in seconds; 0 for none. Clamped by `LoopCompositionPlan`.
+    var crossfade: Double = 0
+    var preset: ExportQualityPreset = .default
+}
+
+/// A trimmed/looped composition of a source video, ready to play in a preview or to export.
+/// Built once and never mutated afterwards, which is what makes sending it across isolation
+/// domains sound.
+nonisolated struct StudioComposition: @unchecked Sendable {
+    let asset: AVComposition
+    let videoComposition: AVVideoComposition
+    let plan: LoopCompositionPlan
+    let settings: ExportOutputSettings
 }
 
 nonisolated enum VideoConverter {
@@ -17,17 +43,21 @@ nonisolated enum VideoConverter {
         let duration = try await asset.load(.duration)
         var codec = "Unknown"
         var resolution = CGSize.zero
+        var displaySize = CGSize.zero
         var bitrate: Float = 0
+        var frameRate: Float = 0
 
         if let videoTrack = try? await asset.loadTracks(withMediaType: .video).first {
-            let (descs, naturalSize, dataRate) = try await videoTrack.load(
-                .formatDescriptions, .naturalSize, .estimatedDataRate
+            let (descs, naturalSize, dataRate, transform, nominalFrameRate) = try await videoTrack.load(
+                .formatDescriptions, .naturalSize, .estimatedDataRate, .preferredTransform, .nominalFrameRate
             )
             if let first = descs.first {
                 codec = fourCCToString(CMFormatDescriptionGetMediaSubType(first))
             }
             resolution = naturalSize
+            displaySize = orientedGeometry(naturalSize: naturalSize, preferredTransform: transform).renderSize
             bitrate = dataRate
+            frameRate = nominalFrameRate
         }
 
         let estimatedHEVCSize: UInt64
@@ -44,7 +74,9 @@ nonisolated enum VideoConverter {
             fileSize: fileSize,
             duration: duration,
             bitrate: bitrate,
-            estimatedHEVCSize: estimatedHEVCSize
+            estimatedHEVCSize: estimatedHEVCSize,
+            displaySize: displaySize,
+            frameRate: frameRate
         )
     }
 
@@ -70,52 +102,134 @@ nonisolated enum VideoConverter {
         return (renderSize, transform)
     }
 
-    /// Transcodes `source` to HEVC at `output`. Cancelling the calling task stops the
-    /// reader and writer; on any failure or cancellation the partial `output` is deleted.
+    /// Transcodes the whole of `source` to HEVC at `output` with the default preset.
+    /// Cancelling the calling task stops the reader and writer; on any failure or cancellation
+    /// the partial `output` is deleted.
     static func transcodeToHEVC(
         source: URL,
         output: URL,
         progress: @escaping @MainActor @Sendable (Double) -> Void
     ) async throws {
+        try await export(source: source, output: output, edit: ImportEdit(), progress: progress)
+    }
+
+    /// Renders `source` with `edit` (trim, loop crossfade, quality preset) to an HEVC `.mp4`
+    /// at `output`. Progress runs 0…1 over the output's duration. Cancelling the calling task
+    /// stops the reader and writer; on any failure or cancellation the partial `output` is
+    /// deleted.
+    static func export(
+        source: URL,
+        output: URL,
+        edit: ImportEdit,
+        progress: @escaping @MainActor @Sendable (Double) -> Void
+    ) async throws {
         do {
-            try await performTranscode(source: source, output: output, progress: progress)
+            try await performExport(source: source, output: output, edit: edit, progress: progress)
         } catch {
             try? FileManager.default.removeItem(at: output)
             throw error
         }
     }
 
-    private static func performTranscode(
-        source: URL,
-        output: URL,
-        progress: @escaping @MainActor @Sendable (Double) -> Void
-    ) async throws {
+    /// Builds the composition `edit` describes: the trimmed range on track A, and for a loop
+    /// crossfade the clip's head on track B under A's fading tail (see `LoopCompositionPlan`).
+    /// The video composition draws the source upright and scaled to the preset's size, at the
+    /// preset's frame rate.
+    static func makeComposition(source: URL, edit: ImportEdit) async throws -> StudioComposition {
         let asset = AVURLAsset(url: source)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw VideoConverterError.noVideoTrack
         }
-        let duration = try await asset.load(.duration)
-        let (naturalSize, preferredTransform, dataRate, nominalFrameRate) = try await videoTrack.load(
-            .naturalSize, .preferredTransform, .estimatedDataRate, .nominalFrameRate
+        let (naturalSize, preferredTransform, dataRate, nominalFrameRate, trackRange) = try await videoTrack.load(
+            .naturalSize, .preferredTransform, .estimatedDataRate, .nominalFrameRate, .timeRange
         )
-        try Task.checkCancellation()
 
-        let frameRate = effectiveFrameRate(nominalFrameRate)
-        let (renderSize, transform) = orientedGeometry(
+        let plan = LoopCompositionPlan(sourceDuration: trackRange.end, trim: edit.trim, crossfade: edit.crossfade)
+        guard plan.outputDuration > .zero else { throw VideoConverterError.emptyTimeRange }
+
+        let (uprightSize, orientation) = orientedGeometry(
             naturalSize: naturalSize,
             preferredTransform: preferredTransform
         )
-        let sourceBitrate = dataRate > 0 ? dataRate : 5_000_000
-        let hevcBitrate = Double(sourceBitrate) * 0.5
+        let settings = edit.preset.outputSettings(
+            sourceSize: uprightSize,
+            sourceFrameRate: nominalFrameRate,
+            sourceBitrate: dataRate
+        )
+        let transform = orientation.concatenating(CGAffineTransform(
+            scaleX: uprightSize.width > 0 ? settings.renderSize.width / uprightSize.width : 1,
+            y: uprightSize.height > 0 ? settings.renderSize.height / uprightSize.height : 1
+        ))
 
+        let composition = AVMutableComposition()
+        guard let mainTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else { throw VideoConverterError.cannotBuildComposition }
+        try mainTrack.insertTimeRange(plan.main.source, of: videoTrack, at: plan.main.outputStart)
+
+        func layer(_ track: AVAssetTrack) -> AVMutableVideoCompositionLayerInstruction {
+            let instruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+            instruction.setTransform(transform, at: .zero)
+            return instruction
+        }
+
+        let passthrough = AVMutableVideoCompositionInstruction()
+        passthrough.timeRange = plan.passthroughRange
+        passthrough.layerInstructions = [layer(mainTrack)]
+        var instructions = [passthrough]
+
+        if let seam = plan.seam, let fadeRange = plan.crossfadeRange {
+            guard let seamTrack = composition.addMutableTrack(
+                withMediaType: .video,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else { throw VideoConverterError.cannotBuildComposition }
+            try seamTrack.insertTimeRange(seam.source, of: videoTrack, at: seam.outputStart)
+
+            // Layer instructions are listed top first: the tail fades out over the head.
+            let fadingTail = layer(mainTrack)
+            fadingTail.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: fadeRange)
+            let crossfade = AVMutableVideoCompositionInstruction()
+            crossfade.timeRange = fadeRange
+            crossfade.layerInstructions = [fadingTail, layer(seamTrack)]
+            instructions.append(crossfade)
+        }
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.frameDuration = CMTime(
+            seconds: 1 / Double(settings.frameRate),
+            preferredTimescale: 60_000
+        )
+        videoComposition.renderSize = settings.renderSize
+        videoComposition.instructions = instructions
+
+        return StudioComposition(
+            asset: composition.copy() as? AVComposition ?? composition,
+            videoComposition: videoComposition.copy() as? AVVideoComposition ?? videoComposition,
+            plan: plan,
+            settings: settings
+        )
+    }
+
+    private static func performExport(
+        source: URL,
+        output: URL,
+        edit: ImportEdit,
+        progress: @escaping @MainActor @Sendable (Double) -> Void
+    ) async throws {
+        let studio = try await makeComposition(source: source, edit: edit)
+        let videoTracks = try await studio.asset.loadTracks(withMediaType: .video)
+        try Task.checkCancellation()
+
+        let settings = studio.settings
         let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
         let outputSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: renderSize.width,
-            AVVideoHeightKey: renderSize.height,
+            AVVideoWidthKey: settings.renderSize.width,
+            AVVideoHeightKey: settings.renderSize.height,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: Int(hevcBitrate),
-                AVVideoExpectedSourceFrameRateKey: frameRate,
+                AVVideoAverageBitRateKey: settings.bitrate,
+                AVVideoExpectedSourceFrameRateKey: settings.frameRate,
             ] as [String: Any],
         ]
 
@@ -124,25 +238,12 @@ nonisolated enum VideoConverter {
         guard writer.canAdd(writerInput) else { throw VideoConverterError.cannotAddInput }
         writer.add(writerInput)
 
-        let reader = try AVAssetReader(asset: asset)
-
-        let videoComposition = AVMutableVideoComposition()
-        videoComposition.frameDuration = CMTime(seconds: 1 / Double(frameRate), preferredTimescale: 60_000)
-        videoComposition.renderSize = renderSize
-
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
-
-        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-        layerInstruction.setTransform(transform, at: .zero)
-        instruction.layerInstructions = [layerInstruction]
-        videoComposition.instructions = [instruction]
-
+        let reader = try AVAssetReader(asset: studio.asset)
         let readerOutput = AVAssetReaderVideoCompositionOutput(
-            videoTracks: [videoTrack],
+            videoTracks: videoTracks,
             videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange]
         )
-        readerOutput.videoComposition = videoComposition
+        readerOutput.videoComposition = studio.videoComposition
         guard reader.canAdd(readerOutput) else { throw VideoConverterError.cannotAddOutput }
         reader.add(readerOutput)
 
@@ -160,7 +261,7 @@ nonisolated enum VideoConverter {
             readerOutput: readerOutput,
             writer: writer,
             writerInput: writerInput,
-            totalSeconds: duration.seconds,
+            totalSeconds: studio.plan.outputDuration.seconds,
             progress: progress
         )
         try await withTaskCancellationHandler {
@@ -168,6 +269,33 @@ nonisolated enum VideoConverter {
         } onCancel: {
             session.cancel()
         }
+    }
+
+    /// Saves the upright frame of `source` at `seconds` as a JPEG at `destination`, scaled to
+    /// fit `maximumSize`. Used for the poster the studio stores next to an import.
+    static func writePosterFrame(
+        of source: URL,
+        at seconds: Double,
+        to destination: URL,
+        maximumSize: CGSize = CGSize(width: 1920, height: 1920)
+    ) async throws {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: source))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = maximumSize
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        let time = CMTime(seconds: max(0, seconds.isFinite ? seconds : 0), preferredTimescale: 600)
+        let image = try await generator.image(at: time).image
+
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        guard let output = CGImageDestinationCreateWithURL(
+            destination as CFURL, UTType.jpeg.identifier as CFString, 1, nil
+        ) else { throw VideoConverterError.cannotWritePoster }
+        CGImageDestinationAddImage(output, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(output) else { throw VideoConverterError.cannotWritePoster }
     }
 
     private static func fourCCToString(_ fourCC: FourCharCode) -> String {
@@ -303,6 +431,9 @@ nonisolated enum VideoConverterError: LocalizedError {
     case cannotRead(Error?)
     case cannotWrite(Error?)
     case transcodingFailed(Error?)
+    case emptyTimeRange
+    case cannotBuildComposition
+    case cannotWritePoster
 
     var errorDescription: String? {
         switch self {
@@ -312,6 +443,9 @@ nonisolated enum VideoConverterError: LocalizedError {
         case .cannotRead(let error): return error?.localizedDescription ?? "Cannot read source video."
         case .cannotWrite(let error): return error?.localizedDescription ?? "Cannot start encoding."
         case .transcodingFailed(let error): return error?.localizedDescription ?? "Transcoding failed."
+        case .emptyTimeRange: return "The selected part of the video is empty."
+        case .cannotBuildComposition: return "Failed to prepare the video for export."
+        case .cannotWritePoster: return "Failed to save the poster frame."
         }
     }
 }

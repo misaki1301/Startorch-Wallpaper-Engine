@@ -81,4 +81,69 @@ struct ImportedWallpaperStoreTests {
 
         #expect(store.items.map(\.url) == [keep])
     }
+
+    // MARK: Import studio sidecars
+
+    private func importVideoWithStudioData(named name: String, metadata: ImportStudioMetadata) throws -> URL {
+        let temp = try makeTempDirectory().appending(path: "\(name).mp4")
+        try Data("video".utf8).write(to: temp)
+        try ImportStudioSidecar.writePendingMetadata(metadata, for: temp)
+        try Data("jpeg".utf8).write(to: ImportStudioSidecar.pendingPosterURL(for: temp))
+        store.addConvertedVideo(at: temp, name: name)
+
+        #expect(!exists(ImportStudioSidecar.pendingMetadataURL(for: temp)))
+        #expect(!exists(ImportStudioSidecar.pendingPosterURL(for: temp)))
+        return try #require(store.items.first { $0.url.lastPathComponent.hasSuffix("_\(name).mp4") }?.url)
+    }
+
+    @Test func studioDataMovesInWithTheVideo() throws {
+        let metadata = ImportStudioMetadata(
+            focalPoint: FocalPoint(x: 0.2, y: 0.7),
+            posterTime: 1.5,
+            preset: .batterySaver,
+            trimStart: 1,
+            trimEnd: 4,
+            crossfade: 0.5
+        )
+        let video = try importVideoWithStudioData(named: "Waves", metadata: metadata)
+        let item = try #require(store.items.first)
+
+        #expect(store.items.count == 1)
+        #expect(item.focalPoint == FocalPoint(x: 0.2, y: 0.7))
+        let poster = try #require(item.posterURL)
+        #expect(exists(poster))
+        #expect(store.posterURL(for: video) == poster)
+        #expect(store.studioMetadata(for: video) == metadata)
+    }
+
+    @Test func importsWithoutStudioDataHaveNoPosterOrFocalPoint() throws {
+        let video = try importVideo(named: "Plain")
+        let item = try #require(store.items.first)
+
+        #expect(item.posterURL == nil)
+        #expect(item.focalPoint == nil)
+        #expect(store.studioMetadata(for: video) == nil)
+    }
+
+    @Test func undoingATrashBringsTheStudioDataBack() throws {
+        let video = try importVideoWithStudioData(
+            named: "Rain",
+            metadata: ImportStudioMetadata(focalPoint: FocalPoint(x: 1, y: 0))
+        )
+        try trash(video)
+        undoManager.undo()
+
+        let item = try #require(store.items.first)
+        #expect(item.focalPoint == FocalPoint(x: 1, y: 0))
+        #expect(item.posterURL != nil)
+    }
+
+    @Test func existingStoreLoadsStudioDataOnLaunch() throws {
+        _ = try importVideoWithStudioData(named: "Snow", metadata: ImportStudioMetadata(focalPoint: .center))
+        let relaunched = ImportedWallpaperStore(directory: importDirectory) { _ in nil }
+
+        #expect(relaunched.items.count == 1)
+        #expect(relaunched.items.first?.focalPoint == .center)
+        #expect(relaunched.items.first?.posterURL != nil)
+    }
 }

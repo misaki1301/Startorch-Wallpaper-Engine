@@ -140,6 +140,14 @@ struct AppSettingsTests {
         #expect(!reloaded.showDockIcon)
         #expect(reloaded.lastWallpaperURL == url)
     }
+
+    @Test func onboardingIsNotCompletedByDefaultAndPersistsOnceSet() {
+        let defaults = makeDefaults()
+        #expect(!AppSettings(defaults: defaults).hasCompletedOnboarding)
+
+        AppSettings(defaults: defaults).hasCompletedOnboarding = true
+        #expect(AppSettings(defaults: defaults).hasCompletedOnboarding)
+    }
 }
 
 @MainActor
