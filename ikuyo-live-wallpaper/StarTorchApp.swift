@@ -7,7 +7,7 @@ struct StarTorchApp: App {
     @State private var wallpaperManager: WallpaperManager
     @State private var cacheManager: WallpaperCacheManager
     @State private var library: WallpaperLibrary
-    @State private var importedStore = ImportedWallpaperStore()
+    @State private var importedStore: ImportedWallpaperStore
     @State private var settings: AppSettings
     private let statsService = SystemStatsService()
 
@@ -22,11 +22,22 @@ struct StarTorchApp: App {
         _cacheManager = State(initialValue: cacheManager)
         let library = WallpaperLibrary(cacheManager: cacheManager)
         _library = State(initialValue: library)
+        let importedStore = ImportedWallpaperStore()
+        _importedStore = State(initialValue: importedStore)
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
 
         if !AppEnvironment.isHostingTests {
+            // App Intents, Shortcuts and the Focus filter are instantiated by the system, not by
+            // SwiftUI, so they have no environment to read from — they go through this bridge to
+            // reach the very instances the UI uses. Never wired under the test host, so a unit
+            // test never touches a shared, process-wide static.
+            WallpaperIntentBridge.manager = wallpaperManager
+            WallpaperIntentBridge.library = library
+            WallpaperIntentBridge.importedStore = importedStore
+            WallpaperIntentBridge.settings = settings
+
             Task {
                 // If the last run crashed or was killed, its desktop pictures were never restored.
                 wallpaperManager.recoverDesktopFromPreviousSession()
