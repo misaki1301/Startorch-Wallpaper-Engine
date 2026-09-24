@@ -25,9 +25,33 @@ Built with SwiftUI + AVFoundation. macOS 14+ (Sonoma & later).
 ### Option 1: Direct Download (Recommended)
 
 1. Go to [**Releases**](https://github.com/misaki1301/startorch-wallpaper-engine/releases)
-2. Download `StarTorch Wallpaper Engine.zip` from the latest release
-3. Unzip and drag to `/Applications`
-4. Right-click → **Open** (first launch only — bypasses Gatekeeper)
+2. Download the `.dmg` from the latest release (a `.zip` is also provided)
+3. Open the DMG and drag **StarTorch Wallpaper Engine** to the
+   **Applications** shortcut inside it
+
+**If the release is notarized** (the release notes say so — this is the
+default once the project's signing secrets are configured, see
+[`docs/RELEASING.md`](docs/RELEASING.md)): just double-click the app in
+`/Applications`. No warning, no extra steps.
+
+**If the release is marked "unsigned"** (Developer ID signing not yet
+configured for that build): macOS Gatekeeper will refuse to open it with a
+plain double-click. On **macOS 15 (Sequoia) and later, right-click →
+Open no longer bypasses this** — instead:
+
+1. Try to open the app once (it will be blocked).
+2. Go to **System Settings → Privacy & Security**, scroll down, and click
+   **Open Anyway** next to the message about StarTorch Wallpaper Engine.
+3. Confirm **Open Anyway** again in the dialog that appears.
+
+On macOS 14 (Sonoma), right-click → **Open** (first launch only) still
+works as an alternative.
+
+### Architecture support
+
+Releases ship as a **universal binary** (Apple Silicon `arm64` +
+Intel `x86_64`) built against a macOS 14.0 deployment target, so the same
+download runs natively on both Apple Silicon and Intel Macs.
 
 ### Option 2: Build from Source
 
@@ -73,6 +97,12 @@ StarTorch Wallpaper Engine/
 - GPU usage not available (no public per-process GPU API on macOS)
 - HEVC conversion may fail on some exotic video formats (falls back gracefully)
 - The gallery is empty until licensed wallpapers are added to the catalog; import your own videos meanwhile
+- No auto-update mechanism yet — check the [Releases](https://github.com/misaki1301/startorch-wallpaper-engine/releases) page for new versions. [Sparkle](https://sparkle-project.org) auto-updates are a possible future addition; see [`docs/RELEASING.md`](docs/RELEASING.md)
+
+## Releasing
+
+Maintainers cutting a new release (signing, notarization, DMG packaging,
+required secrets) should see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Contributing
 

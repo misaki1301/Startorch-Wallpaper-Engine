@@ -12,6 +12,13 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      APP_NAME: StarTorch Wallpaper Engine
+      SCHEME: ikuyo-live-wallpaper
+      PROJECT: StarTorch Wallpaper Engine.xcodeproj
+      TEAM_ID: B97JTSGWZ2
+      KEYCHAIN_NAME: startorch-release.keychain-db
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,46 +28,249 @@ jobs:
         with:
           xcode-version: '26.5'
 
-      - name: Build Release
+      - name: Determine version
+        id: version
         run: |
-          xcodebuild clean build \
-            -scheme "ikuyo-live-wallpaper" \
-            -project "StarTorch Wallpaper Engine.xcodeproj" \
-            -destination 'platform=macOS,arch=arm64' \
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="0.0.0-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VERSION"
+
+      - name: Check for signing secrets
+        id: signing
+        env:
+          HAS_CERT_P12: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+          HAS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD != '' }}
+          HAS_NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID != '' }}
+          HAS_NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID != '' }}
+          HAS_NOTARY_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8_BASE64 != '' }}
+          HAS_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD != '' }}
+        run: |
+          if [[ "$HAS_CERT_P12" == "true" && \
+                "$HAS_CERT_PASSWORD" == "true" && \
+                "$HAS_NOTARY_KEY_ID" == "true" && \
+                "$HAS_NOTARY_ISSUER_ID" == "true" && \
+                "$HAS_NOTARY_KEY_P8" == "true" && \
+                "$HAS_KEYCHAIN_PASSWORD" == "true" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Developer ID signing secrets are not fully configured. Falling back to an unsigned/ad-hoc build. See docs/RELEASING.md to set up notarized releases."
+          fi
+
+      # ---------------------------------------------------------------
+      # Signed + notarized path (used when all secrets are present)
+      # ---------------------------------------------------------------
+
+      - name: Import signing certificate
+        if: steps.signing.outputs.available == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/dev-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_NAME"
+
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$MACOS_CERT_PASSWORD" -A \
+            -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
+      - name: Archive (signed)
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          set -o pipefail
+          xcodebuild clean archive \
+            -scheme "$SCHEME" \
+            -project "$PROJECT" \
             -configuration Release \
+            -archivePath "$RUNNER_TEMP/StarTorch.xcarchive" \
+            -destination 'generic/platform=macOS' \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/$KEYCHAIN_NAME"
+
+      - name: Export signed app
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/StarTorch.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "scripts/ExportOptions.plist"
+
+      - name: Notarize app
+        if: steps.signing.outputs.available == 'true'
+        env:
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/export/$APP_NAME.app"
+          KEY_PATH="$RUNNER_TEMP/notary-key.p8"
+
+          # The .p8 key is kept (not deleted here) so the later "Sign,
+          # notarize, and staple DMG" step can reuse it. It is removed in
+          # the final "Clean up signing artifacts" step.
+          echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode -o "$KEY_PATH"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/notarize.zip"
+
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$KEY_PATH" \
+            --key-id "$NOTARY_API_KEY_ID" \
+            --issuer "$NOTARY_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$APP_PATH"
+
+          rm -f "$RUNNER_TEMP/notarize.zip"
+
+      - name: Locate signed app
+        if: steps.signing.outputs.available == 'true'
+        id: signed_app
+        run: |
+          echo "path=$RUNNER_TEMP/export/$APP_NAME.app" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------
+      # Unsigned fallback path (used when secrets are absent, so tag
+      # builds never fail just because notarization isn't configured)
+      # ---------------------------------------------------------------
+
+      - name: Build Release (unsigned fallback)
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          set -o pipefail
+          xcodebuild clean build \
+            -scheme "$SCHEME" \
+            -project "$PROJECT" \
+            -destination 'platform=macOS' \
+            -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            | xcpretty && exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Locate App
+      - name: Ad-hoc sign fallback build
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          codesign --force --sign - "$RUNNER_TEMP/dd/Build/Products/Release/$APP_NAME.app"
+
+      - name: Locate unsigned app
+        if: steps.signing.outputs.available != 'true'
+        id: unsigned_app
+        run: |
+          echo "path=$RUNNER_TEMP/dd/Build/Products/Release/$APP_NAME.app" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------
+      # Common packaging (both paths converge here)
+      # ---------------------------------------------------------------
+
+      - name: Select app path
         id: app
         run: |
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "StarTorch Wallpaper Engine.app" -path "*/Release/*" | head -1)
+          if [[ "${{ steps.signing.outputs.available }}" == "true" ]]; then
+            APP_PATH="${{ steps.signed_app.outputs.path }}"
+            LABEL="notarized"
+          else
+            APP_PATH="${{ steps.unsigned_app.outputs.path }}"
+            LABEL="unsigned"
+          fi
           echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
-          echo "Found app at: $APP_PATH"
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
+          echo "Using $LABEL app at: $APP_PATH"
 
-      - name: Sign App (ad-hoc)
+      - name: Verify universal binary
         run: |
-          codesign --force --deep --sign - "${{ steps.app.outputs.path }}"
+          BIN="${{ steps.app.outputs.path }}/Contents/MacOS/$APP_NAME"
+          ARCHS="$(lipo -archs "$BIN")"
+          echo "Architectures: $ARCHS"
+          echo "$ARCHS" | grep -q "arm64" || { echo "::error::arm64 slice missing"; exit 1; }
+          echo "$ARCHS" | grep -q "x86_64" || { echo "::error::x86_64 slice missing"; exit 1; }
 
-      - name: Create Archive
+      - name: Create zip archive
         run: |
           cd "$(dirname "${{ steps.app.outputs.path }}")"
-          ditto -c -k --sequesterRsrc --keepParent "$(basename "${{ steps.app.outputs.path }}")" "StarTorch Wallpaper Engine.zip"
-          mv "StarTorch Wallpaper Engine.zip" "$GITHUB_WORKSPACE/"
+          ditto -c -k --sequesterRsrc --keepParent "$(basename "${{ steps.app.outputs.path }}")" "$APP_NAME.zip"
+          mv "$APP_NAME.zip" "$GITHUB_WORKSPACE/"
+
+      - name: Create DMG
+        id: dmg
+        run: |
+          DMG_NAME="StarTorch-Wallpaper-Engine-${{ steps.version.outputs.version }}.dmg"
+          chmod +x scripts/make-dmg.sh
+          ./scripts/make-dmg.sh "${{ steps.app.outputs.path }}" "${{ steps.version.outputs.version }}" "$GITHUB_WORKSPACE"
+          echo "path=$GITHUB_WORKSPACE/$DMG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Sign, notarize, and staple DMG
+        if: steps.signing.outputs.available == 'true'
+        env:
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          DMG_PATH="${{ steps.dmg.outputs.path }}"
+          KEY_PATH="$RUNNER_TEMP/notary-key.p8"
+
+          codesign --sign "Developer ID Application" \
+            --timestamp \
+            --keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" \
+            "$DMG_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$KEY_PATH" \
+            --key-id "$NOTARY_API_KEY_ID" \
+            --issuer "$NOTARY_API_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StarTorch-Wallpaper-Engine-${{ github.sha }}
-          path: StarTorch Wallpaper Engine.zip
+          name: StarTorch-Wallpaper-Engine-${{ github.sha }}-${{ steps.app.outputs.label }}
+          path: |
+            ${{ env.APP_NAME }}.zip
+            ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: StarTorch Wallpaper Engine.zip
+          files: |
+            ${{ env.APP_NAME }}.zip
+            ${{ steps.dmg.outputs.path }}
           generate_release_notes: true
           draft: false
           prerelease: false
+          body: |
+            ${{ steps.app.outputs.label == 'unsigned' && '⚠️ This build is **unsigned** (Developer ID signing secrets were not configured). On macOS 15+, right-click → Open no longer bypasses Gatekeeper — use System Settings → Privacy & Security → "Open Anyway" instead. See docs/RELEASING.md to enable notarized releases.' || '✅ This build is signed with a Developer ID certificate and notarized by Apple.' }}
+
+      - name: Clean up signing artifacts
+        if: always() && steps.signing.outputs.available == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" || true
+          rm -f "$RUNNER_TEMP/notary-key.p8" || true
