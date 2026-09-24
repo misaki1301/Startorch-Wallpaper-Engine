@@ -23,10 +23,15 @@ final class ImportedWallpaperStore {
         scanDirectory()
     }
 
+    /// Accepted extensions for an imported file. HEVC conversions are always `.mp4`; "Keep
+    /// Original" can hand back the source's own container.
+    static let importedExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
     func addConvertedVideo(at tempURL: URL, name: String) {
+        let ext = tempURL.pathExtension.isEmpty ? "mp4" : tempURL.pathExtension
         let destURL = importDirectory
             .appending(path: "\(UUID().uuidString)_\(name.sanitized)")
-            .appendingPathExtension("mp4")
+            .appendingPathExtension(ext)
 
         try? FileManager.default.moveItem(at: tempURL, to: destURL)
         scanDirectory()
@@ -68,7 +73,7 @@ final class ImportedWallpaperStore {
         ) else { return }
 
         items = contents
-            .filter { $0.pathExtension.lowercased() == "mp4" }
+            .filter { Self.importedExtensions.contains($0.pathExtension.lowercased()) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { WallpaperItem(url: $0) }
     }

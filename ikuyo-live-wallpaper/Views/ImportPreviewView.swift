@@ -4,12 +4,16 @@ import AVKit
 @MainActor
 struct ImportPreviewView: View {
     let sourceURL: URL
+    /// More files waiting behind this one in the import queue, shown so a multi-file drop
+    /// doesn't look like it silently dropped the rest.
+    var remainingCount: Int = 0
     let onComplete: (URL, String) -> Void
     let onCancel: () -> Void
 
     @State private var metadata: VideoMetadata?
     @State private var player: AVPlayer?
     @State private var wallpaperName: String = ""
+    @State private var keepOriginal = false
     @State private var isConverting = false
     @State private var conversionProgress: Double = 0
     @State private var conversionError: String?
@@ -53,6 +57,7 @@ struct ImportPreviewView: View {
                     VStack(spacing: 20) {
                         videoPreview
                         nameField
+                        formatPicker
                         if let metadata {
                             comparisonTable(metadata)
                         }
@@ -79,9 +84,16 @@ struct ImportPreviewView: View {
     }
 
     private var header: some View {
-        Text("Import Video")
-            .font(.headline)
-            .padding()
+        VStack(spacing: 2) {
+            Text("Import Video")
+                .font(.headline)
+            if remainingCount > 0 {
+                Text("^[\(remainingCount) more video](inflect: true) waiting")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
     }
 
     private var videoPreview: some View {
@@ -100,6 +112,14 @@ struct ImportPreviewView: View {
         }
     }
 
+    private var formatPicker: some View {
+        Picker("Format", selection: $keepOriginal) {
+            Text("Convert to HEVC").tag(false)
+            Text("Keep Original").tag(true)
+        }
+        .pickerStyle(.segmented)
+    }
+
     private func comparisonTable(_ meta: VideoMetadata) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Video Details")
@@ -107,7 +127,11 @@ struct ImportPreviewView: View {
                 .padding(.bottom, 8)
 
             VStack(spacing: 0) {
-                compareRow(label: "Format", original: meta.codec, converted: "HEVC (H.265)")
+                compareRow(
+                    label: "Format",
+                    original: meta.codec,
+                    converted: keepOriginal ? meta.codec : "HEVC (H.265)"
+                )
                 Divider().padding(.leading, 100)
                 compareRow(
                     label: "Resolution",
@@ -118,7 +142,8 @@ struct ImportPreviewView: View {
                 compareRow(
                     label: "File Size",
                     original: formatBytes(meta.fileSize),
-                    converted: formatBytes(meta.estimatedHEVCSize)
+                    // The converted size is only ever an estimate until conversion finishes.
+                    converted: keepOriginal ? formatBytes(meta.fileSize) : "≈\(formatBytes(meta.estimatedHEVCSize))"
                 )
             }
             .background(Color(nsColor: .controlBackgroundColor))
@@ -126,7 +151,7 @@ struct ImportPreviewView: View {
         }
     }
 
-    private func compareRow(label: String, original: String, converted: String) -> some View {
+    private func compareRow(label: LocalizedStringKey, original: String, converted: String) -> some View {
         HStack {
             Text(label)
                 .foregroundStyle(.secondary)
@@ -150,7 +175,7 @@ struct ImportPreviewView: View {
             Button("Cancel", role: .cancel) { onCancel() }
                 .keyboardShortcut(.escape)
             Spacer()
-            Button("Import & Convert") { startConversion() }
+            Button(keepOriginal ? "Import" : "Import & Convert") { startConversion() }
                 .keyboardShortcut(.return)
                 .buttonStyle(.borderedProminent)
                 .disabled(wallpaperName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -176,6 +201,23 @@ struct ImportPreviewView: View {
     private func startConversion() {
         player?.pause()
         player = nil
+        let name = wallpaperName.trimmingCharacters(in: .whitespaces)
+
+        // "Keep Original" skips transcoding entirely: just copy the source next to the other
+        // imports, keeping its own container/codec.
+        guard !keepOriginal else {
+            let outputURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension(sourceURL.pathExtension)
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: outputURL)
+                onComplete(outputURL, name)
+            } catch {
+                conversionError = error.localizedDescription
+            }
+            return
+        }
+
         conversionProgress = 0
         isConverting = true
         let outputURL = FileManager.default.temporaryDirectory
@@ -187,7 +229,7 @@ struct ImportPreviewView: View {
                 try await VideoConverter.transcodeToHEVC(source: sourceURL, output: outputURL) { pct in
                     conversionProgress = pct
                 }
-                onComplete(outputURL, wallpaperName.trimmingCharacters(in: .whitespaces))
+                onComplete(outputURL, name)
             } catch is CancellationError {
                 // The converter already removed the partial output; go back to the form.
                 isConverting = false
