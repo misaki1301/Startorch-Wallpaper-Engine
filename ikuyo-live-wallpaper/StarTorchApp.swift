@@ -16,7 +16,10 @@ struct StarTorchApp: App {
         let cacheManager = WallpaperCacheManager()
         _settings = State(initialValue: settings)
         _cacheManager = State(initialValue: cacheManager)
-        _library = State(initialValue: WallpaperLibrary(cacheManager: cacheManager))
+        let library = WallpaperLibrary(cacheManager: cacheManager)
+        _library = State(initialValue: library)
+        // Refresh once per launch, independent of any window's lifetime.
+        Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
     }
 
@@ -31,9 +34,7 @@ struct StarTorchApp: App {
                         .environment(settings)
                         .environment(library)
                         .onAppear {
-                            hideTitleBar(true)
                             statsService.start()
-                            resizeWindowForContent()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                                 withAnimation(.easeInOut(duration: 0.5)) {
                                     showSplash = false
@@ -47,14 +48,10 @@ struct StarTorchApp: App {
                         .environment(importedStore)
                         .environment(settings)
                         .environment(library)
-                        .onAppear {
-                            hideTitleBar(false)
-                            resizeWindowForContent()
-                        }
                 }
             }
-            .task { await library.refreshCatalog() }
         }
+        .defaultSize(width: 900, height: 600)
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
             StatsMenuView(stats: statsService)
@@ -119,21 +116,3 @@ struct StatsMenuView: View {
         .padding(.vertical, 4)
     }
 }
-
-private func hideTitleBar(_ hide: Bool) {
-    if let window = NSApplication.shared.windows.first {
-        if hide {
-            window.styleMask.remove(.titled)
-        } else {
-            window.styleMask.insert(.titled)
-        }
-    }
-}
-
-private func resizeWindowForContent() {
-    if let window = NSApplication.shared.windows.first {
-        window.setContentSize(NSSize(width: 900, height: 600))
-        window.center()
-    }
-}
-
