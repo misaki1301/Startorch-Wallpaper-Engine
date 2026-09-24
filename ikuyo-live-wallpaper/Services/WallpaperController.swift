@@ -10,6 +10,7 @@ struct PresentedWallpaper {
     /// The local copy when there is one; used for the still frame.
     let playbackURL: URL
     let player: AVPlayer
+    var readability = ReadabilitySettings()
 }
 
 /// Shows wallpapers on the desktops of the connected displays. The manager talks to this
@@ -67,19 +68,35 @@ nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
 final class WallpaperController: WallpaperPresenting {
     private final class DesktopWindow {
         let window: NSWindow
-        let playerLayer: AVPlayerLayer
+        var content: WallpaperLayerStack
         var url: URL
 
-        init(window: NSWindow, playerLayer: AVPlayerLayer, url: URL) {
+        init(window: NSWindow, content: WallpaperLayerStack, url: URL) {
             self.window = window
-            self.playerLayer = playerLayer
+            self.content = content
             self.url = url
         }
 
         func close() {
-            playerLayer.player = nil
+            content.detach()
             window.contentView = nil
             window.orderOut(nil)
+        }
+    }
+
+    /// A still frame is specific to a wallpaper and the readability settings baked into it.
+    private struct FrameKey: Hashable {
+        let url: URL
+        let readability: ReadabilitySettings
+
+        init(_ wallpaper: PresentedWallpaper) {
+            url = wallpaper.url
+            // Speed doesn't change the picture.
+            readability = ReadabilitySettings(
+                dim: wallpaper.readability.dim,
+                blur: wallpaper.readability.blur,
+                vignette: wallpaper.readability.vignette
+            )
         }
     }
 
@@ -88,9 +105,9 @@ final class WallpaperController: WallpaperPresenting {
     private let restorer: DesktopRestorer
     private var desktopWindows: [String: DesktopWindow] = [:]
     private var layout: [String: PresentedWallpaper] = [:]
-    /// Wallpaper URL → its still frame file, or nil when extracting it failed.
-    private var frames: [URL: URL?] = [:]
-    private var frameTasks: [URL: Task<Void, Never>] = [:]
+    /// Its still frame file, or nil when extracting it failed.
+    private var frames: [FrameKey: URL?] = [:]
+    private var frameTasks: [FrameKey: Task<Void, Never>] = [:]
     private var shownFrames: [String: URL]?
     private var screenChangeTask: Task<Void, Never>?
     private var screenObserver: (any NSObjectProtocol)?
@@ -135,9 +152,10 @@ final class WallpaperController: WallpaperPresenting {
         }
         for (id, wallpaper) in layout {
             if let desktopWindow = desktopWindows[id] {
-                if desktopWindow.playerLayer.player !== wallpaper.player {
-                    desktopWindow.playerLayer.player = wallpaper.player
+                if desktopWindow.content.playerLayer.player !== wallpaper.player {
+                    desktopWindow.content.playerLayer.player = wallpaper.player
                 }
+                desktopWindow.content.apply(wallpaper.readability)
                 desktopWindow.url = wallpaper.url
             } else if let screen = targets[id] {
                 desktopWindows[id] = makeDesktopWindow(on: screen, showing: wallpaper)
@@ -182,16 +200,13 @@ final class WallpaperController: WallpaperPresenting {
 
     private func makeDesktopWindow(on screen: NSScreen, showing wallpaper: PresentedWallpaper) -> DesktopWindow {
         let viewRect = CGRect(origin: .zero, size: screen.frame.size)
-
-        let playerLayer = AVPlayerLayer(player: wallpaper.player)
-        playerLayer.videoGravity = .resizeAspectFill
-        playerLayer.frame = viewRect
-        // Follows the window when the display's resolution changes.
-        playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        let content = WallpaperLayerStack(player: wallpaper.player, readability: wallpaper.readability, frame: viewRect)
 
         let contentView = NSView(frame: viewRect)
         contentView.wantsLayer = true
-        contentView.layer?.addSublayer(playerLayer)
+        // Needed for the blur filter on the video layer.
+        contentView.layerUsesCoreImageFilters = true
+        contentView.layer?.addSublayer(content.root)
 
         let window = NSWindow(
             contentRect: screen.frame,
@@ -209,52 +224,63 @@ final class WallpaperController: WallpaperPresenting {
         window.contentView = contentView
         window.orderFrontRegardless()
 
-        return DesktopWindow(window: window, playerLayer: playerLayer, url: wallpaper.url)
+        return DesktopWindow(window: window, content: content, url: wallpaper.url)
     }
 
     // MARK: - Still Frames
 
-    /// Makes each wallpaper's first frame the desktop picture of its displays, so Mission
-    /// Control, Spaces transitions and the moment before our windows appear match the video.
-    /// Originals are recorded first and restored on stop. Waits until every wallpaper in the
-    /// layout has its frame, so a display never briefly gets its original back.
+    /// Makes each wallpaper's first frame, with its dim, blur and vignette baked in, the desktop
+    /// picture of its displays, so Mission Control, Spaces transitions, the menu bar's text color
+    /// and the moment before our windows appear match the video. Originals are recorded first and
+    /// restored on stop. Waits until every wallpaper in the layout has its frame, so a display
+    /// never briefly gets its original back.
     private func updateStillFrames() {
-        let urls = Set(layout.values.map(\.url))
-        for (url, task) in frameTasks where !urls.contains(url) {
+        let keys = Set(layout.values.map(FrameKey.init))
+        for (key, task) in frameTasks where !keys.contains(key) {
             task.cancel()
-            frameTasks[url] = nil
+            frameTasks[key] = nil
         }
-        frames = frames.filter { urls.contains($0.key) }
+        let hadFrameFor = Set(frames.keys.map(\.url))
+        frames = frames.filter { keys.contains($0.key) }
 
-        for wallpaper in layout.values where frames[wallpaper.url] == nil && frameTasks[wallpaper.url] == nil {
-            extractStillFrame(of: wallpaper)
+        for wallpaper in layout.values {
+            let key = FrameKey(wallpaper)
+            guard frames[key] == nil, frameTasks[key] == nil else { continue }
+            // While a readability slider moves, only the settled value gets rendered.
+            extractStillFrame(of: wallpaper, key: key, after: hadFrameFor.contains(key.url) ? .milliseconds(600) : .zero)
         }
-        guard urls.allSatisfy({ frames[$0] != nil }) else { return }
+        guard keys.allSatisfy({ frames[$0] != nil }) else { return }
 
         var shown: [String: URL] = [:]
         var untouched: Set<String> = []
         for (id, wallpaper) in layout {
-            if let frame = frames[wallpaper.url] ?? nil { shown[id] = frame } else { untouched.insert(id) }
+            if let frame = frames[FrameKey(wallpaper)] ?? nil { shown[id] = frame } else { untouched.insert(id) }
         }
         guard shown != shownFrames else { return }
         shownFrames = shown
         restorer.showFrames(shown, leaving: untouched)
     }
 
-    private func extractStillFrame(of wallpaper: PresentedWallpaper) {
-        let url = wallpaper.url
-        let destination = restorer.framesDirectory.appending(path: WallpaperCacheManager.cacheKey(for: url) + ".png")
-        let targetSize = NSScreen.screens
+    private func extractStillFrame(of wallpaper: PresentedWallpaper, key: FrameKey, after delay: Duration) {
+        let name = WallpaperCacheManager.cacheKey(for: key.url) + "-" + key.readability.imageFingerprint + ".png"
+        let destination = restorer.framesDirectory.appending(path: name)
+        let screens = NSScreen.screens
+        let targetSize = screens
             .map { CGSize(width: $0.frame.width * $0.backingScaleFactor, height: $0.frame.height * $0.backingScaleFactor) }
             .max { $0.width * $0.height < $1.width * $1.height }
             ?? CGSize(width: 1920, height: 1080)
+        let pointScale = screens.map(\.backingScaleFactor).max() ?? 2
 
-        frameTasks[url] = Task { [weak self, playbackURL = wallpaper.playbackURL] in
-            let frameURL = await Self.writeFirstFrame(of: playbackURL, maximumSize: targetSize, to: destination)
+        frameTasks[key] = Task { [weak self, playbackURL = wallpaper.playbackURL, readability = key.readability] in
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            guard !Task.isCancelled else { return }
+            let frameURL = await Self.writeFirstFrame(
+                of: playbackURL, maximumSize: targetSize, readability: readability, pointScale: pointScale, to: destination
+            )
             // The wallpaper may have been stopped or switched while the frame was extracted.
-            guard let self, !Task.isCancelled, self.frameTasks[url] != nil else { return }
-            self.frameTasks[url] = nil
-            self.frames[url] = .some(frameURL)
+            guard let self, !Task.isCancelled, self.frameTasks[key] != nil else { return }
+            self.frameTasks[key] = nil
+            self.frames[key] = .some(frameURL)
             self.updateStillFrames()
         }
     }
@@ -262,6 +288,8 @@ final class WallpaperController: WallpaperPresenting {
     private nonisolated static func writeFirstFrame(
         of videoURL: URL,
         maximumSize: CGSize,
+        readability: ReadabilitySettings,
+        pointScale: CGFloat,
         to destination: URL
     ) async -> URL? {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
@@ -269,7 +297,11 @@ final class WallpaperController: WallpaperPresenting {
         generator.maximumSize = maximumSize
 
         do {
-            let image = try await generator.image(at: .zero).image
+            let image = StillFrameRenderer.render(
+                try await generator.image(at: .zero).image,
+                readability: readability,
+                pointScale: pointScale
+            )
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true

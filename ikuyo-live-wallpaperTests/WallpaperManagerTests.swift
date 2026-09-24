@@ -10,6 +10,7 @@ final class FakeEngine: WallpaperPlayback {
     let player = AVPlayer()
     private(set) var isPlaying = false
     private(set) var isTornDown = false
+    var rate: Float = 1
 
     init(url: URL) { self.url = url }
 
@@ -28,6 +29,8 @@ final class FakePresenter: WallpaperPresenting {
     private(set) var layouts: [[String: URL]] = []
     /// The players of the last layout, by display.
     private(set) var players: [String: AVPlayer] = [:]
+    /// The readability of the last layout, by display.
+    private(set) var readabilities: [String: ReadabilitySettings] = [:]
     private(set) var isShowing = false
     private(set) var restoreCount = 0
     /// When set, completions wait for `finishTransitions()` instead of running at once, like a
@@ -51,6 +54,7 @@ final class FakePresenter: WallpaperPresenting {
     func present(_ layout: [String: PresentedWallpaper], completion: @escaping () -> Void) {
         layouts.append(layout.mapValues(\.url))
         players = layout.mapValues(\.player)
+        readabilities = layout.mapValues(\.readability)
         isShowing = !layout.isEmpty
         finish(completion)
     }

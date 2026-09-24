@@ -80,6 +80,7 @@ final class WallpaperManager {
             MainActor.assumeIsolated { self?.applicationWillTerminate() }
         }
         followPauseRules()
+        followReadability()
     }
 
     /// Keeps `policy` in step with the "When to Pause" settings, so a toggle applies at once.
@@ -91,6 +92,25 @@ final class WallpaperManager {
             // Called before the new value is stored; read it on the next turn.
             Task { @MainActor in self?.followPauseRules() }
         }
+    }
+
+    /// Applies dim, blur, vignette and speed changes to the running wallpapers as they happen.
+    private func followReadability() {
+        guard let settings else { return }
+        _ = withObservationTracking {
+            settings.readabilityByWallpaper
+        } onChange: { [weak self] in
+            // Called before the new value is stored; read it on the next turn.
+            Task { @MainActor in
+                guard let self else { return }
+                if self.isActive { self.refreshLayout(windowsMayChange: false) }
+                self.followReadability()
+            }
+        }
+    }
+
+    private func readability(for url: URL) -> ReadabilitySettings {
+        settings?.readability(for: url) ?? ReadabilitySettings()
     }
 
     /// Puts back desktop pictures left behind by a previous run that crashed or was killed.
@@ -232,8 +252,9 @@ final class WallpaperManager {
 
     /// Works out what every connected display shows, keeps one engine per unique wallpaper and
     /// hands the result to the presenter. Engines no longer needed are torn down once the
-    /// presenter is done with them.
-    private func refreshLayout() {
+    /// presenter is done with them. `windowsMayChange` is false for readability-only updates,
+    /// which don't need the windows watched again.
+    private func refreshLayout(windowsMayChange: Bool = true) {
         let connected = presenter.connectedDisplays
         let resolved = assignments.assignments.resolved(for: connected)
         let needed = Set(resolved.values)
@@ -247,13 +268,17 @@ final class WallpaperManager {
         for url in needed {
             let playbackURL = WallpaperCacheManager.resolvedURL(for: url)
             playbackURLs[url] = playbackURL
-            if engines[url] == nil { engines[url] = makeEngine(playbackURL) }
+            let engine = engines[url] ?? makeEngine(playbackURL)
+            engine.rate = Float(readability(for: url).speed)
+            engines[url] = engine
         }
 
         var layout: [String: PresentedWallpaper] = [:]
         for (id, url) in resolved {
             guard let engine = engines[url], let playbackURL = playbackURLs[url] else { continue }
-            layout[id] = PresentedWallpaper(url: url, playbackURL: playbackURL, player: engine.player)
+            layout[id] = PresentedWallpaper(
+                url: url, playbackURL: playbackURL, player: engine.player, readability: readability(for: url)
+            )
         }
 
         if displayedURLs != resolved { displayedURLs = resolved }
@@ -263,7 +288,9 @@ final class WallpaperManager {
         presenter.present(layout) {
             for engine in retired { engine.tearDown() }
         }
-        signalSource.monitorWallpaperWindows(presenter.windowsByDisplay)
+        if windowsMayChange {
+            signalSource.monitorWallpaperWindows(presenter.windowsByDisplay)
+        }
         applyPolicy()
     }
 

@@ -8,14 +8,31 @@ struct WallpaperInspectorView: View {
     let isImported: Bool
 
     @Environment(WallpaperManager.self) private var manager
+    @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var poster: NSImage?
+    /// The poster's pixels, for the menu bar contrast check.
+    @State private var posterImage: CGImage?
     @State private var previewPlayer: AVPlayer?
     @State private var isPreviewing = false
     @State private var metadata: VideoMetadata?
 
     private var isCurrent: Bool {
         manager.isShowing(item.url)
+    }
+
+    /// This wallpaper's dim, blur, vignette and speed; edits apply to the desktop immediately.
+    private var readability: Binding<ReadabilitySettings> {
+        Binding(
+            get: { settings.readability(for: item.url) },
+            set: { settings.setReadability($0, for: item.url) }
+        )
+    }
+
+    private var contrast: MenuBarContrast.Analysis? {
+        posterImage.flatMap {
+            MenuBarContrast.analyze($0, screenHeight: NSScreen.main?.frame.height ?? 982, dim: readability.wrappedValue.dim)
+        }
     }
 
     var body: some View {
@@ -25,10 +42,14 @@ struct WallpaperInspectorView: View {
                 header
                 details
                 applyButton
+                Divider()
+                ReadabilityControls(readability: readability, contrast: contrast)
             }
             .padding()
         }
         .task(id: item.url) {
+            poster = nil
+            posterImage = nil
             await loadPoster()
             metadata = try? await VideoConverter.metadata(for: item.url)
         }
@@ -146,6 +167,7 @@ struct WallpaperInspectorView: View {
         generator.maximumSize = CGSize(width: 800, height: 500)
         if let cgImage = try? await generator.image(at: CMTime(seconds: 1, preferredTimescale: 1)).image {
             poster = NSImage(cgImage: cgImage, size: .zero)
+            posterImage = cgImage
         }
     }
 
