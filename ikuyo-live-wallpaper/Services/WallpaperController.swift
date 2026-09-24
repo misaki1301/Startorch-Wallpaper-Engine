@@ -65,6 +65,10 @@ nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
 
 /// Owns the borderless desktop-level window on each display and the still frames used as desktop
 /// pictures. Display changes update, add or remove windows in place; players keep running.
+///
+/// Nothing cuts: a new wallpaper crossfades over the old one on each display, a new window fades
+/// in over the desktop picture, and stopping fades the windows out to the still frame of the same
+/// video (the desktop picture). All of it is instant with Reduce Motion.
 final class WallpaperController: WallpaperPresenting {
     private final class DesktopWindow {
         let window: NSWindow
@@ -110,6 +114,10 @@ final class WallpaperController: WallpaperPresenting {
     private var frameTasks: [FrameKey: Task<Void, Never>] = [:]
     private var shownFrames: [String: URL]?
     private var screenChangeTask: Task<Void, Never>?
+    /// Bumped by every present and dismiss, so a finished fade-out only closes the windows if
+    /// nothing was presented meanwhile.
+    private var fadeOutGeneration = 0
+    private var isFadingOut = false
     private var screenObserver: (any NSObjectProtocol)?
 
     var connectedDisplays: [String] {
@@ -133,6 +141,11 @@ final class WallpaperController: WallpaperPresenting {
 
     func present(_ layout: [String: PresentedWallpaper], completion: @escaping () -> Void) {
         self.layout = layout
+        // Cancels a fade-out in progress: the windows stay.
+        fadeOutGeneration += 1
+        let wasFadingOut = isFadingOut
+        isFadingOut = false
+        let duration = transitionDuration
         var screens: [String: NSScreen] = [:]
         for screen in NSScreen.screens {
             if let id = screen.displayUUID { screens[id] = screen }
@@ -150,22 +163,61 @@ final class WallpaperController: WallpaperPresenting {
             guard let frame = targets[id]?.frame else { continue }
             desktopWindows[id]?.window.setFrame(frame, display: true)
         }
-        for (id, wallpaper) in layout {
-            if let desktopWindow = desktopWindows[id] {
-                if desktopWindow.content.playerLayer.player !== wallpaper.player {
-                    desktopWindow.content.playerLayer.player = wallpaper.player
-                }
+
+        let plan = DisplayTransition.plan(
+            current: desktopWindows.mapValues { ObjectIdentifier($0.content.player) },
+            target: layout.filter { targets[$0.key] != nil }.mapValues { ObjectIdentifier($0.player) }
+        )
+        var crossfades: [(from: WallpaperLayerStack, to: WallpaperLayerStack)] = []
+        var fadeIns: [DesktopWindow] = []
+        for (id, transition) in plan {
+            guard let wallpaper = layout[id] else { continue }
+            switch transition {
+            case .update:
+                guard let desktopWindow = desktopWindows[id] else { continue }
                 desktopWindow.content.apply(wallpaper.readability)
                 desktopWindow.url = wallpaper.url
-            } else if let screen = targets[id] {
-                desktopWindows[id] = makeDesktopWindow(on: screen, showing: wallpaper)
+                if wasFadingOut { showFully(desktopWindow.window, duration: duration) }
+            case .crossfade:
+                guard let desktopWindow = desktopWindows[id] else { continue }
+                let old = desktopWindow.content
+                let new = addContent(to: desktopWindow, showing: wallpaper, visible: duration == .zero)
+                crossfades.append((old, new))
+                if wasFadingOut { showFully(desktopWindow.window, duration: duration) }
+            case .fadeIn:
+                guard let screen = targets[id] else { continue }
+                let desktopWindow = makeDesktopWindow(on: screen, showing: wallpaper, visible: duration == .zero)
+                desktopWindows[id] = desktopWindow
+                if duration > .zero { fadeIns.append(desktopWindow) }
+            case .remove:
+                // Already closed above.
+                break
             }
         }
 
         updateStillFrames()
-        completion()
+
+        for desktopWindow in fadeIns {
+            fadeIn(desktopWindow, duration: duration)
+        }
+        guard duration > .zero, !crossfades.isEmpty else {
+            for fade in crossfades { fade.from.detach() }
+            completion()
+            return
+        }
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for fade in crossfades {
+                    group.addTask { await Self.crossfade(from: fade.from, to: fade.to, duration: duration) }
+                }
+            }
+            // The old players are off screen now; the manager can tear them down.
+            completion()
+        }
     }
 
+    /// Fades the windows out to the still frame of the same video (the desktop picture), then
+    /// removes them. A `present` during the fade cancels it and keeps the windows.
     func dismiss(animated: Bool, completion: @escaping () -> Void) {
         screenChangeTask?.cancel()
         screenChangeTask = nil
@@ -175,9 +227,89 @@ final class WallpaperController: WallpaperPresenting {
         shownFrames = nil
         layout.removeAll()
 
+        fadeOutGeneration += 1
+        let generation = fadeOutGeneration
+        let duration = animated ? transitionDuration : .zero
+        guard duration > .zero, !desktopWindows.isEmpty else {
+            closeAllWindows()
+            completion()
+            return
+        }
+        let windows = desktopWindows.values.map(\.window)
+        isFadingOut = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration.timeInterval
+            for window in windows { window.animator().alphaValue = 0 }
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            if let self, self.fadeOutGeneration == generation {
+                self.isFadingOut = false
+                self.closeAllWindows()
+            }
+            completion()
+        }
+    }
+
+    private func closeAllWindows() {
         for desktopWindow in desktopWindows.values { desktopWindow.close() }
         desktopWindows.removeAll()
-        completion()
+    }
+
+    // MARK: - Transitions
+
+    /// 0.6 s, or instant with Reduce Motion.
+    private var transitionDuration: Duration {
+        DisplayTransition.duration(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    }
+
+    /// Puts a new layer stack for `wallpaper` on top of the window's current one.
+    private func addContent(to desktopWindow: DesktopWindow, showing wallpaper: PresentedWallpaper, visible: Bool) -> WallpaperLayerStack {
+        let bounds = desktopWindow.window.contentView?.bounds ?? desktopWindow.content.root.frame
+        let content = WallpaperLayerStack(player: wallpaper.player, readability: wallpaper.readability, frame: bounds)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        content.root.opacity = visible ? 1 : 0
+        desktopWindow.window.contentView?.layer?.addSublayer(content.root)
+        CATransaction.commit()
+        desktopWindow.content = content
+        desktopWindow.url = wallpaper.url
+        return content
+    }
+
+    /// Waits for the new video's first frame, fades it in over the old one, then removes the old.
+    private static func crossfade(from old: WallpaperLayerStack, to new: WallpaperLayerStack, duration: Duration) async {
+        await new.waitUntilReadyForDisplay(timeout: .seconds(2))
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(duration.timeInterval)
+        CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
+        new.root.opacity = 1
+        CATransaction.commit()
+        try? await Task.sleep(for: duration)
+        old.detach()
+    }
+
+    /// Fades a new window in over the desktop picture once its video has a frame.
+    private func fadeIn(_ desktopWindow: DesktopWindow, duration: Duration) {
+        let generation = fadeOutGeneration
+        Task { [weak self] in
+            await desktopWindow.content.waitUntilReadyForDisplay(timeout: .seconds(2))
+            // Stopped (fading out) in the meantime.
+            guard let self, self.fadeOutGeneration == generation else { return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = duration.timeInterval
+                desktopWindow.window.animator().alphaValue = 1
+            }, completionHandler: nil)
+        }
+    }
+
+    /// Brings back a window that was fading out when a new layout arrived.
+    private func showFully(_ window: NSWindow, duration: Duration) {
+        guard window.alphaValue < 1 else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration.timeInterval
+            window.animator().alphaValue = 1
+        }
     }
 
     func restoreOriginalDesktops() {
@@ -198,7 +330,7 @@ final class WallpaperController: WallpaperPresenting {
         }
     }
 
-    private func makeDesktopWindow(on screen: NSScreen, showing wallpaper: PresentedWallpaper) -> DesktopWindow {
+    private func makeDesktopWindow(on screen: NSScreen, showing wallpaper: PresentedWallpaper, visible: Bool) -> DesktopWindow {
         let viewRect = CGRect(origin: .zero, size: screen.frame.size)
         let content = WallpaperLayerStack(player: wallpaper.player, readability: wallpaper.readability, frame: viewRect)
 
@@ -222,6 +354,7 @@ final class WallpaperController: WallpaperPresenting {
         window.hasShadow = false
         window.isReleasedWhenClosed = false
         window.contentView = contentView
+        window.alphaValue = visible ? 1 : 0
         window.orderFrontRegardless()
 
         return DesktopWindow(window: window, content: content, url: wallpaper.url)

@@ -13,11 +13,14 @@ import QuartzCore
 final class WallpaperLayerStack {
     let root = CALayer()
     let playerLayer: AVPlayerLayer
+    /// The player this stack was made for; a different player means a new stack (and a fade).
+    let player: AVPlayer
     private let dimLayer = CALayer()
     private let vignetteLayer = CAGradientLayer()
     private(set) var readability = ReadabilitySettings()
 
     init(player: AVPlayer, readability: ReadabilitySettings, frame: CGRect) {
+        self.player = player
         playerLayer = AVPlayerLayer(player: player)
 
         root.frame = frame
@@ -84,6 +87,15 @@ final class WallpaperLayerStack {
             }
         }
         CATransaction.commit()
+    }
+
+    /// Returns once the video has a frame to show, so a fade never starts from an empty layer, or
+    /// after `timeout` (e.g. a remote video still buffering). Only polls during a transition.
+    func waitUntilReadyForDisplay(timeout: Duration) async {
+        let deadline = ContinuousClock.now + timeout
+        while !playerLayer.isReadyForDisplay, ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
     }
 
     /// Stops drawing: releases the player and leaves the layer tree.
