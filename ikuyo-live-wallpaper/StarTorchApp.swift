@@ -86,6 +86,7 @@ struct MenuBarContent: View {
     let stats: SystemStatsService
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
+    @Environment(WallpaperManager.self) private var manager
 
     var body: some View {
         StatsMenuView(stats: stats)
@@ -93,6 +94,10 @@ struct MenuBarContent: View {
         Divider()
 
         PlaybackControls()
+        // Explain automatic pauses; a pause by the user already shows as "Resume".
+        if let reason = manager.pauseReason, reason != .user {
+            Text("Paused: \(reason.label)")
+        }
 
         Divider()
 

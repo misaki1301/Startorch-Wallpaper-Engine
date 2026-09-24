@@ -17,6 +17,8 @@ struct ConfigurationView: View {
                 Divider().padding(.horizontal)
                 startupSection
                 Divider().padding(.horizontal)
+                whenToPauseSection
+                Divider().padding(.horizontal)
                 storageSection
                 Divider().padding(.horizontal)
                 aboutSection
@@ -122,6 +124,57 @@ struct ConfigurationView: View {
             // The user may have changed it in System Settings meanwhile.
             launchAtLogin.refresh()
         }
+    }
+
+    private var whenToPauseSection: some View {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("When to Pause")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            pauseToggle(
+                "Desktop is covered",
+                detail: "Pause while windows hide the whole desktop",
+                isOn: $settings.pauseWhenDesktopCovered
+            )
+            pauseToggle(
+                "An app is full screen",
+                detail: "Pause while full-screen apps fill every display",
+                isOn: $settings.pauseForFullScreenApps
+            )
+            pauseToggle(
+                "Low Power Mode is on",
+                detail: "Pause while your Mac is saving energy",
+                isOn: $settings.pauseInLowPowerMode
+            )
+            pauseToggle(
+                "Running on battery",
+                detail: "Pause whenever your Mac isn't plugged in",
+                isOn: $settings.pauseOnBattery
+            )
+
+            Label(
+                "The wallpaper always pauses while the display is asleep or the screen is locked, since nobody can see it.",
+                systemImage: "moon.zzz"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding()
+    }
+
+    private func pauseToggle(_ title: String, detail: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .toggleStyle(.switch)
     }
 
     private var storageSection: some View {
