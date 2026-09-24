@@ -25,7 +25,6 @@ struct StarTorchApp: App {
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
-        statsService.start()
 
         if !AppEnvironment.isHostingTests {
             Task {
@@ -138,5 +137,9 @@ struct StatsMenuView: View {
             .padding(.horizontal, 12)
         }
         .padding(.vertical, 4)
+        // The menu bar extra's content view stays alive even while the menu is closed, so without
+        // this the 2-second poll would run for the app's entire lifetime for no reason.
+        .onAppear { stats.start() }
+        .onDisappear { stats.stop() }
     }
 }
