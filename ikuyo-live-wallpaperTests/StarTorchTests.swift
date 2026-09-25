@@ -1,3 +1,5 @@
+import AVFoundation
+import CoreVideo
 import Foundation
 import Testing
 @testable import StarTorch_Wallpaper_Engine
@@ -13,6 +15,39 @@ func makeDefaults() -> UserDefaults {
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     return defaults
+}
+
+/// Writes a real, playable (if tiny) H.264 clip at `url` — a few solid-color frames — so tests
+/// that exercise thumbnail generation, metadata probing, or playback don't have to fake an
+/// `AVAsset` around plain bytes. `url`'s extension picks the container (`.mov` or `.mp4`).
+@discardableResult
+func makeTinyTestVideo(at url: URL, size: CGSize = CGSize(width: 64, height: 64), frames: Int = 3) async throws -> URL {
+    let fileType: AVFileType = url.pathExtension.lowercased() == "mp4" ? .mp4 : .mov
+    let writer = try AVAssetWriter(outputURL: url, fileType: fileType)
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: size.width,
+        AVVideoHeightKey: size.height,
+    ])
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
+    writer.add(input)
+    guard writer.startWriting() else { throw CocoaError(.fileWriteUnknown) }
+    writer.startSession(atSourceTime: .zero)
+
+    for frame in 0..<frames {
+        while !input.isReadyForMoreMediaData { try await Task.sleep(for: .milliseconds(5)) }
+        var buffer: CVPixelBuffer?
+        CVPixelBufferCreate(nil, Int(size.width), Int(size.height), kCVPixelFormatType_32BGRA, nil, &buffer)
+        guard let pixelBuffer = buffer else { throw CocoaError(.fileWriteUnknown) }
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        memset(CVPixelBufferGetBaseAddress(pixelBuffer), Int32(frame % 255), CVPixelBufferGetDataSize(pixelBuffer))
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30))
+    }
+    input.markAsFinished()
+    await writer.finishWriting()
+    guard writer.status == .completed else { throw CocoaError(.fileWriteUnknown) }
+    return url
 }
 
 private let sampleCatalogJSON = Data("""
