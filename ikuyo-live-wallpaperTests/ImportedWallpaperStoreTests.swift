@@ -138,6 +138,25 @@ struct ImportedWallpaperStoreTests {
         #expect(item.posterURL != nil)
     }
 
+    /// Simulates a video left over from before `.studio/` sidecars existed: a real video file,
+    /// named exactly like a normal import (`<UUID>_<name>.mp4`), sitting in the import directory
+    /// with no sidecar metadata or poster — reproduces the file that triggered the AVKit
+    /// `VideoPlayer` crash (see `WallpaperCardViewTests`). The store must still load it, and
+    /// resolve a nil poster and focal point, without any force unwrap along the way.
+    @Test func legacyImportWithNoSidecarDataLoadsCleanly() async throws {
+        let legacyURL = importDirectory.appending(path: "C7A40FCB-1234-4A21-9B21-000000000000_Elysia_honkai.mp4")
+        try await makeTinyTestVideo(at: legacyURL)
+
+        let relaunched = ImportedWallpaperStore(directory: importDirectory) { _ in nil }
+
+        let item = try #require(relaunched.items.first { $0.url.lastPathComponent == legacyURL.lastPathComponent })
+        #expect(relaunched.items.count == 1)
+        #expect(item.posterURL == nil)
+        #expect(item.focalPoint == nil)
+        #expect(relaunched.studioMetadata(for: legacyURL) == nil)
+        #expect(relaunched.posterURL(for: legacyURL) == nil)
+    }
+
     @Test func existingStoreLoadsStudioDataOnLaunch() throws {
         _ = try importVideoWithStudioData(named: "Snow", metadata: ImportStudioMetadata(focalPoint: .center))
         let relaunched = ImportedWallpaperStore(directory: importDirectory) { _ in nil }

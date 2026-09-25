@@ -1,5 +1,5 @@
 import SwiftUI
-import AVKit
+import AVFoundation
 
 /// One wallpaper in a grid. A single click only selects the card (see `onSelect`); applying it
 /// takes a double-click, Return while focused, or the context menu / inspector button
@@ -22,11 +22,40 @@ struct WallpaperCardView: View {
 
     @State private var thumbnail: NSImage?
     @State private var failedThumbnail = false
-    @State private var isHovering = false
+    @State private var isHovering: Bool
     @State private var previewPlayer: AVPlayer?
     @State private var energyScore: EnergyScore?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    init(
+        item: WallpaperItem,
+        isActive: Bool,
+        isSelected: Bool,
+        isFavorite: Bool,
+        downloadState: DownloadState?,
+        hideDownloadBadge: Bool,
+        onSelect: @escaping () -> Void,
+        onApply: @escaping () -> Void,
+        onToggleFavorite: @escaping () -> Void,
+        trailingBadge: (() -> AnyView)? = nil,
+        startsHoveringForTesting isHovering: Bool = false
+    ) {
+        self.item = item
+        self.isActive = isActive
+        self.isSelected = isSelected
+        self.isFavorite = isFavorite
+        self.downloadState = downloadState
+        self.hideDownloadBadge = hideDownloadBadge
+        self.onSelect = onSelect
+        self.onApply = onApply
+        self.onToggleFavorite = onToggleFavorite
+        self.trailingBadge = trailingBadge
+        // `startsHoveringForTesting` only exists so `WallpaperCardViewTests` can force the
+        // hover-preview branch (the one that used to crash via AVKit's `VideoPlayer`) without a
+        // real mouse event; every call site in the app leaves it at the default `false`.
+        self._isHovering = State(initialValue: isHovering)
+    }
 
     var body: some View {
         Button(action: onSelect) {
@@ -39,6 +68,11 @@ struct WallpaperCardView: View {
             return .handled
         }
         .contentShape(.rect)
+        .onAppear {
+            // Normally a no-op (`isHovering` starts `false`); it only matters when a test
+            // constructs the view already "hovering" via `startsHoveringForTesting`.
+            updatePreviewPlayback(hovering: isHovering)
+        }
         .onHover { hovering in
             isHovering = hovering
             updatePreviewPlayback(hovering: hovering)
@@ -87,8 +121,7 @@ struct WallpaperCardView: View {
     @ViewBuilder
     private var posterOrPreview: some View {
         if isHovering, !reduceMotion, let previewPlayer {
-            VideoPlayer(player: previewPlayer)
-                .disabled(true)
+            PlayerLayerView(player: previewPlayer)
                 .allowsHitTesting(false)
         } else if let thumbnail {
             Image(nsImage: thumbnail)
@@ -220,8 +253,11 @@ struct WallpaperCardView: View {
             }
             previewPlayer?.play()
         } else {
+            // No player at all while not hovering: `PlayerLayerView.dismantleNSView` clears the
+            // layer's player as the view leaves, and dropping the `AVPlayer` itself here
+            // releases it fully instead of leaving it paused in the background.
             previewPlayer?.pause()
-            previewPlayer?.seek(to: .zero)
+            previewPlayer = nil
         }
     }
 }

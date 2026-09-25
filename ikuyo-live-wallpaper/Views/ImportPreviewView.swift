@@ -1,5 +1,5 @@
 import SwiftUI
-import AVKit
+import AVFoundation
 
 /// The import studio: preview a new video, trim it, optionally crossfade the loop seam, pick a
 /// poster frame and a focal point, choose a quality preset (or keep the original file), then

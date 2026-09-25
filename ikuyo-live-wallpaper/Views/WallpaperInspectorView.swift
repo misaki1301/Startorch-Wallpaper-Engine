@@ -1,5 +1,5 @@
 import SwiftUI
-import AVKit
+import AVFoundation
 
 /// Shown in the `.inspector` for whichever card is selected. A single click on a card only gets
 /// you here — this is where "Set as Wallpaper" actually applies it.
