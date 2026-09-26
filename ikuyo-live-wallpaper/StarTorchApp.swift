@@ -10,6 +10,7 @@ struct StarTorchApp: App {
     @State private var importedStore: ImportedWallpaperStore
     @State private var settings: AppSettings
     @State private var scheduleService: ScheduleService
+    @State private var screenSaverExporter: ScreenSaverExporter
     private let statsService = SystemStatsService()
 
     init() {
@@ -33,6 +34,15 @@ struct StarTorchApp: App {
             observeSystemEvents: !AppEnvironment.isHostingTests
         )
         _scheduleService = State(initialValue: scheduleService)
+        // A test run must never read or write the real screen saver handoff folder.
+        let screenSaverExporter = ScreenSaverExporter(
+            manager: wallpaperManager,
+            settings: settings,
+            directory: AppEnvironment.isHostingTests
+                ? .temporaryDirectory.appending(path: "screensaver-handoff-\(UUID().uuidString)", directoryHint: .isDirectory)
+                : ScreenSaverExporter.defaultDirectory
+        )
+        _screenSaverExporter = State(initialValue: screenSaverExporter)
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
@@ -69,6 +79,7 @@ struct StarTorchApp: App {
                 .environment(settings)
                 .environment(library)
                 .environment(scheduleService)
+                .environment(screenSaverExporter)
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -87,6 +98,7 @@ struct StarTorchApp: App {
                 .environment(library)
                 .environment(importedStore)
                 .environment(scheduleService)
+                .environment(screenSaverExporter)
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
