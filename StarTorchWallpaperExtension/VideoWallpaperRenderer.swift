@@ -105,10 +105,28 @@ final class VideoWallpaperRenderer {
         reconcilePlayers()
     }
 
-    /// The poster frame, for the host's snapshot of the surface.
+    /// The poster frame, for the host's snapshot of the surface. Before anything is exported there
+    /// is no poster; answering with an error then makes WallpaperAgent fail its export and fall
+    /// back to the default wallpaper, so hand it a plain placeholder instead.
     func snapshotImage(forKey key: String) -> CGImage? {
-        content.poster
+        content.poster ?? Self.placeholderSnapshot
     }
+
+    /// A dark vertical gradient, drawn once.
+    private static let placeholderSnapshot: CGImage? = {
+        let width = 1920, height = 1080
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+        let colors = [CGColor(srgbRed: 0.10, green: 0.11, blue: 0.16, alpha: 1),
+                      CGColor(srgbRed: 0.02, green: 0.02, blue: 0.04, alpha: 1)] as CFArray
+        if let gradient = CGGradient(colorsSpace: context.colorSpace, colors: colors, locations: [0, 1]) {
+            context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: CGFloat(height)), end: .zero, options: [])
+        }
+        return context.makeImage()
+    }()
 
     // MARK: Content
 

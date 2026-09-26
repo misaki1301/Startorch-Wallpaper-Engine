@@ -242,7 +242,7 @@ struct SettingsView: View {
                 }
             }
             HStack {
-                Button(screenSaverExporter.isExporting ? "Cancel Export" : "Export Current Wallpaper") {
+                Button(screenSaverExporter.isExporting ? "Cancel Export" : "Export for Screen Saver") {
                     if screenSaverExporter.isExporting {
                         screenSaverExporter.cancelExport()
                     } else {
@@ -301,10 +301,10 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
             HStack {
-                Button("Export Current Wallpaper") {
+                Button("Export for Lock Screen & Desktop") {
                     exportCurrentWallpaper()
                 }
-                .disabled(manager.currentURL == nil || systemWallpaperExporter.isExporting)
+                .disabled(systemWallpaperSourceURL == nil || systemWallpaperExporter.isExporting)
                 if systemWallpaperExporter.isExporting {
                     ProgressView().controlSize(.small)
                 }
@@ -316,7 +316,7 @@ struct SettingsView: View {
         } header: {
             Text("Lock Screen & Desktop (System Wallpaper)")
         } footer: {
-            Text("Export the wallpaper that's playing, then choose StarTorch in System Settings › Wallpaper. macOS plays it on the desktop and the lock screen, even when this app isn't running. Export again after changing wallpapers. This uses a private macOS interface and may stop working after a macOS update.")
+            Text("Export the wallpaper that's playing (or the last one you played), then choose StarTorch in System Settings › Wallpaper. macOS plays it on the desktop and the lock screen, even when this app isn't running. Export again after changing wallpapers. This uses a private macOS interface and may stop working after a macOS update.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -337,8 +337,13 @@ struct SettingsView: View {
         }
     }
 
+    /// The wallpaper on screen, else the last one started (so exporting works while stopped).
+    private var systemWallpaperSourceURL: URL? {
+        manager.currentURL ?? settings.availableLastWallpaperURL()
+    }
+
     private func exportCurrentWallpaper() {
-        guard let url = manager.currentURL else { return }
+        guard let url = systemWallpaperSourceURL else { return }
         let title = (library.catalog + importedStore.items).first { $0.url == url }?.name
             ?? url.deletingPathExtension().lastPathComponent
         Task {

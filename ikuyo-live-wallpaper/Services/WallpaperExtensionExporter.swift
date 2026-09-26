@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+import os
 
 nonisolated enum WallpaperExtensionExportError: LocalizedError, Equatable {
     /// The wallpaper is a remote catalog video that hasn't been downloaded.
@@ -46,6 +47,8 @@ final class WallpaperExtensionExporter {
     private(set) var isExporting = false
     private(set) var lastError: String?
 
+    private static let log = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper", category: "WallpaperExtensionExporter")
+
     @ObservationIgnored private let directory: URL?
     @ObservationIgnored private let writePoster: PosterWriter
     @ObservationIgnored private var resolvedStore: SystemWallpaperStore??
@@ -80,6 +83,7 @@ final class WallpaperExtensionExporter {
         guard let store else {
             status = .unavailable
             lastError = WallpaperExtensionExportError.containerUnavailable.localizedDescription
+            Self.log.error("export failed: App Group container unavailable")
             return false
         }
         isExporting = true
@@ -95,9 +99,11 @@ final class WallpaperExtensionExporter {
             )
             status = .exported(manifest)
             lastError = nil
+            Self.log.notice("exported \(sourceURL.lastPathComponent, privacy: .public) for the system wallpaper extension")
             return true
         } catch {
             lastError = error.localizedDescription
+            Self.log.error("export failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
