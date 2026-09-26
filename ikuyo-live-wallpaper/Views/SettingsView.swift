@@ -11,6 +11,7 @@ struct SettingsView: View {
     @Environment(WallpaperLibrary.self) private var library
     @Environment(ImportedWallpaperStore.self) private var importedStore
     @Environment(ScheduleService.self) private var scheduleService
+    @Environment(ScreenSaverExporter.self) private var screenSaverExporter
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var isShowingEnergySummary = false
     @State private var systemWallpaperExporter = WallpaperExtensionExporter()
@@ -20,6 +21,7 @@ struct SettingsView: View {
             generalSection
             whenToPauseSection
             scheduleSection
+            screenSaverSection
             energySection
             systemWallpaperSection
             storageSection
@@ -228,6 +230,54 @@ struct SettingsView: View {
         return Calendar.current.date(from: components) ?? Date()
     }
 
+    private var screenSaverSection: some View {
+        Section {
+            LabeledContent("Screen Saver Video") {
+                HStack {
+                    if screenSaverExporter.isExporting {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(screenSaverStatusText)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Button(screenSaverExporter.isExporting ? "Cancel Export" : "Export Current Wallpaper") {
+                    if screenSaverExporter.isExporting {
+                        screenSaverExporter.cancelExport()
+                    } else {
+                        screenSaverExporter.startExport()
+                    }
+                }
+                .disabled(!screenSaverExporter.isExporting && screenSaverExporter.sourceURL == nil)
+                Button("Install Screen Saver…") {
+                    if let saver = Bundle.main.url(forResource: "StarTorch", withExtension: "saver") {
+                        NSWorkspace.shared.open(saver)
+                    }
+                }
+                Button("Open Screen Saver Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        } header: {
+            Text("Screen Saver")
+        } footer: {
+            Text("Export a wallpaper, install StarTorch, then choose it in Screen Saver settings. It plays when the screen saver starts and keeps playing over the lock screen if a password is required after the screen saver. Locking the screen directly shows the still desktop picture instead.")
+        }
+        .onAppear { screenSaverExporter.refreshStatus() }
+    }
+
+    private var screenSaverStatusText: String {
+        switch screenSaverExporter.status {
+        case .neverExported: String(localized: "Not exported")
+        case .upToDate(let date): String(localized: "Up to date (\(date.formatted(date: .abbreviated, time: .shortened)))")
+        case .stale: String(localized: "Out of date — export again")
+        case .failed(let message): String(localized: "Export failed: \(message)")
+        }
+    }
+
     private var energySection: some View {
         Section("Energy") {
             Button("View Weekly Summary…") {
@@ -413,4 +463,9 @@ private struct ScheduleTargetPicker: View {
         .environment(library)
         .environment(ImportedWallpaperStore())
         .environment(ScheduleService(manager: manager, library: library, settings: settings, observeSystemEvents: false))
+        .environment(ScreenSaverExporter(
+            manager: manager,
+            settings: settings,
+            directory: .temporaryDirectory.appending(path: "screensaver-preview", directoryHint: .isDirectory)
+        ))
 }

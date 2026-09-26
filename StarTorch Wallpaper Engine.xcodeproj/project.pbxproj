@@ -53,6 +53,7 @@
 		5E9565352FF0AFAA005E2EEF /* ikuyo-live-wallpaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ikuyo-live-wallpaper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5EC0DE042FF6A00000A1B001 /* StarTorch.saver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarTorch.saver; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -94,6 +95,16 @@
 			path = "ikuyo-live-wallpaperTests";
 			sourceTree = "<group>";
 		};
+		5EC0DE052FF6A00000A1B001 /* StarTorchSaver */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StarTorchSaver;
+			sourceTree = "<group>";
+		};
+		5EC0DE062FF6A00000A1B001 /* StarTorchShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StarTorchShared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +130,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		5E95654B2FF0AFAC005E2EEF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5EC0DE072FF6A00000A1B001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -248,6 +266,29 @@
 			productReference = 5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		5EC0DE082FF6A00000A1B001 /* StarTorchSaver */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5EC0DE0E2FF6A00000A1B001 /* Build configuration list for PBXNativeTarget "StarTorchSaver" */;
+			buildPhases = (
+				5EC0DE0A2FF6A00000A1B001 /* Sources */,
+				5EC0DE072FF6A00000A1B001 /* Frameworks */,
+				5EC0DE092FF6A00000A1B001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5EC0DE052FF6A00000A1B001 /* StarTorchSaver */,
+				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
+			);
+			name = StarTorchSaver;
+			packageProductDependencies = (
+			);
+			productName = StarTorchSaver;
+			productReference = 5EC0DE042FF6A00000A1B001 /* StarTorch.saver */;
+			productType = "com.apple.product-type.bundle";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -271,6 +312,9 @@
 					5E95654D2FF0AFAC005E2EEF = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = 5E9565342FF0AFAA005E2EEF;
+					};
+					5EC0DE082FF6A00000A1B001 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -325,6 +369,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5EC0DE092FF6A00000A1B001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -356,6 +407,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5EC0DE0A2FF6A00000A1B001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -373,6 +431,11 @@
 			isa = PBXTargetDependency;
 			target = 5E9565342FF0AFAA005E2EEF /* ikuyo-live-wallpaper */;
 			targetProxy = 5E95654F2FF0AFAC005E2EEF /* PBXContainerItemProxy */;
+		};
+		5EC0DE0B2FF6A00000A1B001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5EC0DE082FF6A00000A1B001 /* StarTorchSaver */;
+			targetProxy = 5EC0DE022FF6A00000A1B001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -715,6 +778,60 @@
 			};
 			name = Release;
 		};
+		5EC0DE0C2FF6A00000A1B001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B97JTSGWZ2;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = StarTorch;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = StarTorchSaverView;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.saver";
+				PRODUCT_NAME = StarTorch;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = saver;
+			};
+			name = Debug;
+		};
+		5EC0DE0D2FF6A00000A1B001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B97JTSGWZ2;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = StarTorch;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = StarTorchSaverView;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.saver";
+				PRODUCT_NAME = StarTorch;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = saver;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -759,6 +876,15 @@
 			buildConfigurations = (
 				5E95655F2FF0AFAC005E2EEF /* Debug */,
 				5E9565602FF0AFAC005E2EEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5EC0DE0E2FF6A00000A1B001 /* Build configuration list for PBXNativeTarget "StarTorchSaver" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EC0DE0C2FF6A00000A1B001 /* Debug */,
+				5EC0DE0D2FF6A00000A1B001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
