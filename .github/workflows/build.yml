@@ -31,4 +31,16 @@ jobs:
             -project "StarTorch Wallpaper Engine.xcodeproj" \
             -scheme "ikuyo-live-wallpaper" \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO
+
+      # Local verification builds override STARTORCH_WALLPAPER_EXTENSION_POINT so a dev Mac never
+      # picks up an unsigned build; make sure the project default is still the real point and the
+      # extension is embedded where ExtensionKit looks for it.
+      - name: Check the embedded wallpaper extension
+        run: |
+          set -euo pipefail
+          APPEX="$RUNNER_TEMP/dd/Build/Products/Debug/StarTorch Wallpaper Engine.app/Contents/Extensions/StarTorchWallpaperExtension.appex"
+          POINT=$(plutil -extract EXAppExtensionAttributes.EXExtensionPointIdentifier raw "$APPEX/Contents/Info.plist")
+          echo "Extension point: $POINT"
+          test "$POINT" = "com.apple.wallpaper"

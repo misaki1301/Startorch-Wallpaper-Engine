@@ -18,7 +18,7 @@ final class SharedSaverPlayer {
         static func == (lhs: Lease, rhs: Lease) -> Bool { lhs.id == rhs.id }
     }
 
-    private static let log = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.saver", category: "player")
+    private static let log = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.saver", category: "player")
 
     private var url: URL?
     private var player: AVQueuePlayer?

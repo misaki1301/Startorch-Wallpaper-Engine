@@ -40,7 +40,7 @@ final class ScreenSaverExporter {
     /// Renders `source` to an HEVC `.mp4` at `output`.
     typealias Transcoder = @Sendable (_ source: URL, _ output: URL) async throws -> Void
 
-    private static let log = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper", category: "ScreenSaverExporter")
+    private static let log = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper", category: "ScreenSaverExporter")
 
     /// The saver's container, spelled out from the user's real home directory.
     nonisolated static var defaultDirectory: URL {
