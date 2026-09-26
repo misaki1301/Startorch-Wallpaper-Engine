@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5E95F00D2FF0B000005E2EEF /* StarTorchWallpaperExtension.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = 5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5EC0DE012FF6A00000A1B001 /* StarTorch.saver in Embed Screen Saver */ = {isa = PBXBuildFile; fileRef = 5EC0DE042FF6A00000A1B001 /* StarTorch.saver */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +33,13 @@
 			remoteGlobalIDString = 5E95F0052FF0B000005E2EEF;
 			remoteInfo = StarTorchWallpaperExtension;
 		};
+		5EC0DE022FF6A00000A1B001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5E95652D2FF0AFAA005E2EEF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5EC0DE082FF6A00000A1B001;
+			remoteInfo = StarTorchSaver;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -44,6 +52,17 @@
 				5E95F00D2FF0B000005E2EEF /* StarTorchWallpaperExtension.appex in Embed ExtensionKit Extensions */,
 			);
 			name = "Embed ExtensionKit Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5EC0DE032FF6A00000A1B001 /* Embed Screen Saver */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				5EC0DE012FF6A00000A1B001 /* StarTorch.saver in Embed Screen Saver */,
+			);
+			name = "Embed Screen Saver";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -149,6 +168,8 @@
 		5E95652C2FF0AFAA005E2EEF = {
 			isa = PBXGroup;
 			children = (
+				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
+				5EC0DE052FF6A00000A1B001 /* StarTorchSaver */,
 				5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
 				5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */,
 				5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
@@ -164,6 +185,7 @@
 				5E9565352FF0AFAA005E2EEF /* ikuyo-live-wallpaper.app */,
 				5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */,
 				5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */,
+				5EC0DE042FF6A00000A1B001 /* StarTorch.saver */,
 				5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */,
 			);
 			name = Products;
@@ -203,14 +225,17 @@
 				5E9565322FF0AFAA005E2EEF /* Frameworks */,
 				5E9565332FF0AFAA005E2EEF /* Resources */,
 				5E95F00C2FF0B000005E2EEF /* Embed ExtensionKit Extensions */,
+				5EC0DE032FF6A00000A1B001 /* Embed Screen Saver */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				5E95F00F2FF0B000005E2EEF /* PBXTargetDependency */,
+				5EC0DE0B2FF6A00000A1B001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
+				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
 				5E95F0042FF0B000005E2EEF /* WallpaperExtensionShared */,
 			);
 			name = "ikuyo-live-wallpaper";
@@ -335,6 +360,7 @@
 				5E9565342FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
 				5E9565432FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */,
 				5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
+				5EC0DE082FF6A00000A1B001 /* StarTorchSaver */,
 				5E95F0052FF0B000005E2EEF /* StarTorchWallpaperExtension */,
 			);
 		};
