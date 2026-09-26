@@ -29,7 +29,7 @@ StarTorch Wallpaper Engine.app
       │    WallpaperSettingsPayload.swift        │
       ├─ VideoWallpaperRenderer.swift            │
       └─ WallpaperContentSource.swift ◀──reads───┘
-                 App Group container  B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper
+                 App Group container  B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper
                  Library/Application Support/SystemWallpaper/
                    manifest.json   clips/<hash>.mp4|mov   posters/<hash>.jpg
 ```
@@ -98,7 +98,7 @@ a timer. StarTorch replaces that with plain layers:
 
 The prototype bundled its content inside the app. That doesn't work for a wallpaper the user
 picks at run time, so StarTorch uses an **App Group container** instead. Both targets are
-entitled to `B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper`. Because the ID is team-prefixed,
+entitled to `B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper`. Because the ID is team-prefixed,
 macOS 15+ grants both targets access without a prompt when they are signed by that team.
 
 **Export Current Wallpaper** does the following:
@@ -219,7 +219,7 @@ B97JTSGWZ2.
       Release with "Apple Development" signing.
    3. Check the signature:
       - `codesign -d --entitlements - "…/StarTorch Wallpaper Engine.app/Contents/Extensions/StarTorchWallpaperExtension.appex"`
-        must show `app-sandbox` and the `B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper` group.
+        must show `app-sandbox` and the `B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper` group.
       - `plutil -p …/StarTorchWallpaperExtension.appex/Contents/Info.plist | grep EXExtensionPoint`
         must show `com.apple.wallpaper`.
 2. **Install.**
@@ -227,7 +227,7 @@ B97JTSGWZ2.
    2. Copy the app to `/Applications`, replacing any older copy.
    3. Launch it once.
    4. Check registration: `pluginkit -m -p com.apple.wallpaper | grep shibuyaxpress` should list
-      `com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension`.
+      `com.shibuyaxpress.startorch-wallpaper.WallpaperExtension`.
 3. **Export.**
    1. Play a local or downloaded wallpaper.
    2. Open Settings (⌘,) › Lock Screen & Desktop (System Wallpaper) › **Export Current Wallpaper**.
@@ -254,7 +254,7 @@ B97JTSGWZ2.
    3. Playback resumes, and nothing plays while asleep.
 10. **Reboot.** StarTorch should still be selected and play at the login window and on the
     desktop.
-11. **Console.** Filter on subsystem `com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension`
+11. **Console.** Filter on subsystem `com.shibuyaxpress.startorch-wallpaper.WallpaperExtension`
     and on process `WallpaperAgent`.
     - Expected: `ACQUIRE`, `UPDATE mode=… activity=…`, `Created the player`, `Released the player`.
     - Report any `UNSUPPORTED RUNTIME`, `Missing runtime types`, `No App Group container`,
@@ -269,7 +269,7 @@ B97JTSGWZ2.
     1. In System Settings › Wallpaper, pick any other wallpaper first.
     2. Quit StarTorch and move it from `/Applications` to the Trash.
     3. Optionally delete the hand-off folder:
-       `~/Library/Group Containers/B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper`.
+       `~/Library/Group Containers/B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper`.
     4. Check with `pluginkit -m -p com.apple.wallpaper`: StarTorch disappears once LaunchServices
        notices the removal. Log out and back in if it lingers.
 

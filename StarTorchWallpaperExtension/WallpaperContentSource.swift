@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import os
 
-private let contentLog = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension", category: "content")
+private let contentLog = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension", category: "content")
 
 /// What the app exported, read from the shared App Group container (see `SystemWallpaperStore`),
 /// and kept current: the folder is watched with a kqueue vnode source (no timers), and the

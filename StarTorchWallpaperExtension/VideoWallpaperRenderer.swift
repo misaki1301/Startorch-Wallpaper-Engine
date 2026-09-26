@@ -2,7 +2,7 @@ import AVFoundation
 import QuartzCore
 import os
 
-private let rendererLog = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension", category: "renderer")
+private let rendererLog = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension", category: "renderer")
 
 /// A layer context the host composites. The private `CAContext` behind it lives in
 /// Private/WallpaperHostBridge.swift; the renderer only needs these two things.

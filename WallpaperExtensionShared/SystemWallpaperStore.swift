@@ -70,7 +70,7 @@ nonisolated struct SystemWallpaperManifest: Codable, Equatable, Sendable {
 nonisolated struct SystemWallpaperStore: Sendable {
     /// Team-prefixed, so macOS 15+ grants the app and its extension access without a prompt when
     /// both are signed by team B97JTSGWZ2. Must match both targets' entitlements.
-    static let appGroupIdentifier = "B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper"
+    static let appGroupIdentifier = "B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper"
     static let folderName = "SystemWallpaper"
 
     let root: URL

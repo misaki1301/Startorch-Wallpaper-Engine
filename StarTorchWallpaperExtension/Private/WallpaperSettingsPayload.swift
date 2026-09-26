@@ -16,7 +16,7 @@ import os
 // ║ changed: one fixed "StarTorch" choice instead of a folder scan, a video badge, Swift 6.   ║
 // ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 
-private let payloadLog = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension", category: "settings-payload")
+private let payloadLog = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension", category: "settings-payload")
 
 nonisolated enum WallpaperSettingsPayload {
     /// The one choice StarTorch offers: "whatever the app exported last".
@@ -27,7 +27,7 @@ nonisolated enum WallpaperSettingsPayload {
     /// also what the lock screen shows). `thumbnailURL` is the exported poster, or nil for the
     /// bundled placeholder.
     static func makeViewModels(thumbnailURL: URL?) -> AnyObject? {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension"
         let provider = ChoiceProviderID(rawValue: bundleID)
         let choiceID = ChoiceID(
             id: choiceIdentifier,

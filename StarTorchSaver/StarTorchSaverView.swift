@@ -15,7 +15,7 @@ import os
 /// window, and all full-screen instances share one player (one decoder) per process.
 @objc(StarTorchSaverView)
 final class StarTorchSaverView: ScreenSaverView {
-    private static let log = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.saver", category: "view")
+    private static let log = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.saver", category: "view")
 
     private var playerLayer: AVPlayerLayer?
     private var posterLayer: CALayer?

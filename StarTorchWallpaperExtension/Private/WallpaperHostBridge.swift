@@ -29,7 +29,7 @@ import os
 // ║ for Swift 6 strict concurrency, the video renderer and presentation-mode decoding.       ║
 // ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 
-private let bridgeLog = Logger(subsystem: "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension", category: "host-bridge")
+private let bridgeLog = Logger(subsystem: "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension", category: "host-bridge")
 
 // MARK: - Private framework loading
 

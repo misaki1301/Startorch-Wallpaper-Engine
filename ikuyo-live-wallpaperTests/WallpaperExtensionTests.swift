@@ -58,7 +58,7 @@ struct SystemWallpaperManifestTests {
 
     @Test func usesTheTeamPrefixedAppGroup() {
         // Must match both targets' entitlements; team-prefixed so macOS 15+ doesn't prompt.
-        #expect(SystemWallpaperStore.appGroupIdentifier == "B97JTSGWZ2.com.shibuyaxpress.ikuyo-live-wallpaper")
+        #expect(SystemWallpaperStore.appGroupIdentifier == "B97JTSGWZ2.com.shibuyaxpress.startorch-wallpaper")
     }
 }
 

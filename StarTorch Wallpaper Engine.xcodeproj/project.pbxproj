@@ -484,7 +484,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STARTORCH_WALLPAPER_EXTENSION_POINT = com.apple.wallpaper;
@@ -515,7 +515,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper.WallpaperExtension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STARTORCH_WALLPAPER_EXTENSION_POINT = com.apple.wallpaper;
@@ -674,7 +674,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper";
 				PRODUCT_NAME = "StarTorch Wallpaper Engine";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -712,7 +712,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper";
 				PRODUCT_NAME = "StarTorch Wallpaper Engine";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -734,7 +734,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaperTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaperTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -755,7 +755,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaperTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaperTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -774,7 +774,7 @@
 				DEVELOPMENT_TEAM = B97JTSGWZ2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaperUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaperUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -793,7 +793,7 @@
 				DEVELOPMENT_TEAM = B97JTSGWZ2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaperUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaperUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -818,7 +818,7 @@
 				INFOPLIST_KEY_NSPrincipalClass = StarTorchSaverView;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.saver";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper.saver";
 				PRODUCT_NAME = StarTorch;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -845,7 +845,7 @@
 				INFOPLIST_KEY_NSPrincipalClass = StarTorchSaverView;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.saver";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.startorch-wallpaper.saver";
 				PRODUCT_NAME = StarTorch;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
