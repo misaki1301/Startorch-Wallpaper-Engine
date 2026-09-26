@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Environment(ScreenSaverExporter.self) private var screenSaverExporter
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var isShowingEnergySummary = false
+    @State private var systemWallpaperExporter = WallpaperExtensionExporter()
 
     var body: some View {
         Form {
@@ -22,6 +23,7 @@ struct SettingsView: View {
             scheduleSection
             screenSaverSection
             energySection
+            systemWallpaperSection
             storageSection
         }
         .formStyle(.grouped)
@@ -29,6 +31,7 @@ struct SettingsView: View {
         .onAppear {
             cacheSize = cacheManager.cacheSize()
             launchAtLogin.refresh()
+            systemWallpaperExporter.refreshStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // The user may have changed Login Items in System Settings meanwhile.
@@ -281,6 +284,76 @@ struct SettingsView: View {
                 isShowingEnergySummary = true
             }
         }
+    }
+
+    // MARK: System Wallpaper (lock screen & desktop)
+
+    /// Route A: StarTorch's wallpaper extension, which macOS itself runs on the desktop and the
+    /// lock screen once "StarTorch" is picked in System Settings › Wallpaper.
+    private var systemWallpaperSection: some View {
+        Section {
+            LabeledContent("Exported") {
+                systemWallpaperStatus
+            }
+            if let error = systemWallpaperExporter.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Button("Export Current Wallpaper") {
+                    exportCurrentWallpaper()
+                }
+                .disabled(manager.currentURL == nil || systemWallpaperExporter.isExporting)
+                if systemWallpaperExporter.isExporting {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                Button("Open Wallpaper Settings…") {
+                    openWallpaperSettings()
+                }
+            }
+        } header: {
+            Text("Lock Screen & Desktop (System Wallpaper)")
+        } footer: {
+            Text("Export the wallpaper that's playing, then choose StarTorch in System Settings › Wallpaper. macOS plays it on the desktop and the lock screen, even when this app isn't running. Export again after changing wallpapers. This uses a private macOS interface and may stop working after a macOS update.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var systemWallpaperStatus: some View {
+        switch systemWallpaperExporter.status {
+        case .exported(let manifest):
+            Text("\(manifest.title), \(manifest.exportedAt.formatted(.relative(presentation: .named)))")
+                .foregroundStyle(.secondary)
+        case .notExported:
+            Text("Nothing yet")
+                .foregroundStyle(.secondary)
+        case .unavailable:
+            Text("Unavailable in this build")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func exportCurrentWallpaper() {
+        guard let url = manager.currentURL else { return }
+        let title = (library.catalog + importedStore.items).first { $0.url == url }?.name
+            ?? url.deletingPathExtension().lastPathComponent
+        Task {
+            await systemWallpaperExporter.export(
+                sourceURL: url,
+                playbackURL: WallpaperCacheManager.resolvedURL(for: url),
+                title: title,
+                readability: settings.readability(for: url)
+            )
+        }
+    }
+
+    private func openWallpaperSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var storageSection: some View {

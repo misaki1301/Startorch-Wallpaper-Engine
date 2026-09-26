@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5E95F00D2FF0B000005E2EEF /* StarTorchWallpaperExtension.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = 5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5EC0DE012FF6A00000A1B001 /* StarTorch.saver in Embed Screen Saver */ = {isa = PBXBuildFile; fileRef = 5EC0DE042FF6A00000A1B001 /* StarTorch.saver */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -25,6 +26,13 @@
 			remoteGlobalIDString = 5E9565342FF0AFAA005E2EEF;
 			remoteInfo = "ikuyo-live-wallpaper";
 		};
+		5E95F00E2FF0B000005E2EEF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5E95652D2FF0AFAA005E2EEF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E95F0052FF0B000005E2EEF;
+			remoteInfo = StarTorchWallpaperExtension;
+		};
 		5EC0DE022FF6A00000A1B001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 5E95652D2FF0AFAA005E2EEF /* Project object */;
@@ -35,6 +43,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		5E95F00C2FF0B000005E2EEF /* Embed ExtensionKit Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				5E95F00D2FF0B000005E2EEF /* StarTorchWallpaperExtension.appex in Embed ExtensionKit Extensions */,
+			);
+			name = "Embed ExtensionKit Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5EC0DE032FF6A00000A1B001 /* Embed Screen Saver */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -49,13 +68,37 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.extensionkit-extension"; includeInIndex = 0; path = StarTorchWallpaperExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E9565352FF0AFAA005E2EEF /* ikuyo-live-wallpaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ikuyo-live-wallpaper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ikuyo-live-wallpaperUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EC0DE042FF6A00000A1B001 /* StarTorch.saver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarTorch.saver; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5E95F0032FF0B000005E2EEF /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5E95F0052FF0B000005E2EEF /* StarTorchWallpaperExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		5E95F0022FF0B000005E2EEF /* StarTorchWallpaperExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5E95F0032FF0B000005E2EEF /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			path = StarTorchWallpaperExtension;
+			sourceTree = "<group>";
+		};
+		5E95F0042FF0B000005E2EEF /* WallpaperExtensionShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WallpaperExtensionShared;
+			sourceTree = "<group>";
+		};
 		5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "ikuyo-live-wallpaper";
@@ -84,6 +127,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5E95F0072FF0B000005E2EEF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5E9565322FF0AFAA005E2EEF /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -118,11 +168,13 @@
 		5E95652C2FF0AFAA005E2EEF = {
 			isa = PBXGroup;
 			children = (
+				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
+				5EC0DE052FF6A00000A1B001 /* StarTorchSaver */,
 				5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
 				5EAF0A202FF5027D0097EA18 /* ikuyo-live-wallpaperTests */,
 				5E9565512FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
-				5EC0DE052FF6A00000A1B001 /* StarTorchSaver */,
-				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
+				5E95F0022FF0B000005E2EEF /* StarTorchWallpaperExtension */,
+				5E95F0042FF0B000005E2EEF /* WallpaperExtensionShared */,
 				5E9565362FF0AFAA005E2EEF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -134,6 +186,7 @@
 				5E9565442FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests.xctest */,
 				5E95654E2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests.xctest */,
 				5EC0DE042FF6A00000A1B001 /* StarTorch.saver */,
+				5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -141,6 +194,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		5E95F0052FF0B000005E2EEF /* StarTorchWallpaperExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E95F0092FF0B000005E2EEF /* Build configuration list for PBXNativeTarget "StarTorchWallpaperExtension" */;
+			buildPhases = (
+				5E95F0062FF0B000005E2EEF /* Sources */,
+				5E95F0072FF0B000005E2EEF /* Frameworks */,
+				5E95F0082FF0B000005E2EEF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5E95F0022FF0B000005E2EEF /* StarTorchWallpaperExtension */,
+				5E95F0042FF0B000005E2EEF /* WallpaperExtensionShared */,
+			);
+			name = StarTorchWallpaperExtension;
+			packageProductDependencies = (
+			);
+			productName = StarTorchWallpaperExtension;
+			productReference = 5E95F0012FF0B000005E2EEF /* StarTorchWallpaperExtension.appex */;
+			productType = "com.apple.product-type.extensionkit-extension";
+		};
 		5E9565342FF0AFAA005E2EEF /* ikuyo-live-wallpaper */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5E9565582FF0AFAC005E2EEF /* Build configuration list for PBXNativeTarget "ikuyo-live-wallpaper" */;
@@ -148,16 +224,19 @@
 				5E9565312FF0AFAA005E2EEF /* Sources */,
 				5E9565322FF0AFAA005E2EEF /* Frameworks */,
 				5E9565332FF0AFAA005E2EEF /* Resources */,
+				5E95F00C2FF0B000005E2EEF /* Embed ExtensionKit Extensions */,
 				5EC0DE032FF6A00000A1B001 /* Embed Screen Saver */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5E95F00F2FF0B000005E2EEF /* PBXTargetDependency */,
 				5EC0DE0B2FF6A00000A1B001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				5E9565372FF0AFAA005E2EEF /* ikuyo-live-wallpaper */,
 				5EC0DE062FF6A00000A1B001 /* StarTorchShared */,
+				5E95F0042FF0B000005E2EEF /* WallpaperExtensionShared */,
 			);
 			name = "ikuyo-live-wallpaper";
 			packageProductDependencies = (
@@ -245,6 +324,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					5E95F0052FF0B000005E2EEF = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					5E9565342FF0AFAA005E2EEF = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -279,11 +361,19 @@
 				5E9565432FF0AFAC005E2EEF /* ikuyo-live-wallpaperTests */,
 				5E95654D2FF0AFAC005E2EEF /* ikuyo-live-wallpaperUITests */,
 				5EC0DE082FF6A00000A1B001 /* StarTorchSaver */,
+				5E95F0052FF0B000005E2EEF /* StarTorchWallpaperExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		5E95F0082FF0B000005E2EEF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5E9565332FF0AFAA005E2EEF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -315,6 +405,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5E95F0062FF0B000005E2EEF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5E9565312FF0AFAA005E2EEF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -346,6 +443,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5E95F00F2FF0B000005E2EEF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E95F0052FF0B000005E2EEF /* StarTorchWallpaperExtension */;
+			targetProxy = 5E95F00E2FF0B000005E2EEF /* PBXContainerItemProxy */;
+		};
 		5E9565462FF0AFAC005E2EEF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5E9565342FF0AFAA005E2EEF /* ikuyo-live-wallpaper */;
@@ -364,6 +466,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		5E95F00A2FF0B000005E2EEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StarTorchWallpaperExtension/StarTorchWallpaperExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B97JTSGWZ2;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StarTorchWallpaperExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STARTORCH_WALLPAPER_EXTENSION_POINT = com.apple.wallpaper;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "StarTorchWallpaperExtension/Private/WallpaperPrivateAPI.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		5E95F00B2FF0B000005E2EEF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StarTorchWallpaperExtension/StarTorchWallpaperExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B97JTSGWZ2;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StarTorchWallpaperExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.shibuyaxpress.ikuyo-live-wallpaper.WallpaperExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STARTORCH_WALLPAPER_EXTENSION_POINT = com.apple.wallpaper;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "StarTorchWallpaperExtension/Private/WallpaperPrivateAPI.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 		5E9565562FF0AFAC005E2EEF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -697,6 +861,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5E95F0092FF0B000005E2EEF /* Build configuration list for PBXNativeTarget "StarTorchWallpaperExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E95F00A2FF0B000005E2EEF /* Debug */,
+				5E95F00B2FF0B000005E2EEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		5E9565302FF0AFAA005E2EEF /* Build configuration list for PBXProject "StarTorch Wallpaper Engine" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
