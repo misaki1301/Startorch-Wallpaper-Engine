@@ -146,6 +146,18 @@ final class ScreenSaverExporter {
         settings?.readability(for: url) ?? ReadabilitySettings()
     }
 
+    /// A compact, observable summary of `status`/`isExporting` for the UI. See `WallpaperSyncPhase`.
+    /// `.stale` reads as `.idle`: auto-sync is about to replace it, and a manual "Sync Now" is
+    /// still available either way.
+    var syncPhase: WallpaperSyncPhase {
+        if isExporting { return .syncing }
+        switch status {
+        case .neverExported, .stale: return .idle
+        case .upToDate(let date): return .upToDate(date)
+        case .failed(let message): return .failed(message)
+        }
+    }
+
     private func follow(_ manager: WallpaperManager) {
         _ = withObservationTracking {
             manager.currentURL

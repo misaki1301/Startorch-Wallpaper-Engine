@@ -11,6 +11,8 @@ struct StarTorchApp: App {
     @State private var settings: AppSettings
     @State private var scheduleService: ScheduleService
     @State private var screenSaverExporter: ScreenSaverExporter
+    @State private var systemWallpaperExporter: WallpaperExtensionExporter
+    @State private var exportCoordinator: ExportCoordinator
     private let statsService = SystemStatsService()
 
     init() {
@@ -43,6 +45,30 @@ struct StarTorchApp: App {
                 : ScreenSaverExporter.defaultDirectory
         )
         _screenSaverExporter = State(initialValue: screenSaverExporter)
+
+        let systemWallpaperExporter = WallpaperExtensionExporter()
+        _systemWallpaperExporter = State(initialValue: systemWallpaperExporter)
+        systemWallpaperExporter.refreshStatus()
+
+        // Keeps the system wallpaper extension and the screen saver following whatever
+        // StarTorch is playing, with no manual export click. A test run must never start this
+        // against real directories or the real App Group container.
+        let exportCoordinator = ExportCoordinator(
+            manager: wallpaperManager,
+            settings: settings,
+            cacheManager: cacheManager,
+            systemWallpaperExporter: systemWallpaperExporter,
+            screenSaverExporter: screenSaverExporter,
+            titleForWallpaper: { url in
+                (library.catalog + importedStore.items).first { $0.url == url }?.name
+                    ?? url.deletingPathExtension().lastPathComponent
+            }
+        )
+        _exportCoordinator = State(initialValue: exportCoordinator)
+        if !AppEnvironment.isHostingTests {
+            exportCoordinator.start()
+        }
+
         // Refresh once per launch, independent of any window's lifetime.
         Task { await library.refreshCatalog() }
         NSApplication.shared.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
@@ -80,6 +106,8 @@ struct StarTorchApp: App {
                 .environment(library)
                 .environment(scheduleService)
                 .environment(screenSaverExporter)
+                .environment(systemWallpaperExporter)
+                .environment(exportCoordinator)
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -99,6 +127,8 @@ struct StarTorchApp: App {
                 .environment(importedStore)
                 .environment(scheduleService)
                 .environment(screenSaverExporter)
+                .environment(systemWallpaperExporter)
+                .environment(exportCoordinator)
         }
 
         MenuBarExtra("StarTorch", systemImage: "photo.on.rectangle.angled") {
@@ -106,6 +136,7 @@ struct StarTorchApp: App {
                 .environment(wallpaperManager)
                 .environment(settings)
                 .environment(library)
+                .environment(exportCoordinator)
         }
         .menuBarExtraStyle(.window)
     }

@@ -117,6 +117,67 @@ reads a manifest, it ignores unknown versions and any file name that could escap
 
 A remote catalog wallpaper has to be downloaded before it can be exported.
 
+## Auto-sync
+
+Both hand-offs above — the system wallpaper extension's and the screen saver's (from #62,
+`StarTorchShared/ScreenSaverHandoff.swift`) — used to need a manual export click. `ExportCoordinator`
+(`ikuyo-live-wallpaper/Services/ExportCoordinator.swift`) now keeps them in sync with whatever
+StarTorch is playing automatically, so the lock screen, desktop and screen saver always show the
+wallpaper the user just picked.
+
+**Triggers** (observed via `withObservationTracking`, never polled):
+
+- `WallpaperManager.currentURL` changing — covers a manual pick, a schedule slot firing, shuffle,
+  an App Intent, and `resumeLastSession` at launch, since they all end up setting it.
+- The current wallpaper's `ReadabilitySettings` changing (dim, vignette, speed).
+- A pending remote wallpaper's download finishing, when it was the sync's target.
+
+**Debounce.** Every trigger reschedules a single ~1.5s timer, so a burst of changes — dragging a
+readability slider, a shuffle — produces one export of the last target, not one per change.
+
+**Cancellation.** If a newer target arrives while an export is still running, that export is
+cancelled (`WallpaperExtensionExporter.cancelExport()` / `ScreenSaverExporter.cancelExport()`)
+before the new one starts. Both exporters write their manifest last, after the clip and poster are
+already in place, so a cancelled export never leaves a half-written or inconsistent hand-off — the
+previous manifest (if any) is simply left alone.
+
+**Remote wallpapers.** If the target isn't downloaded yet, the coordinator shows "Waiting for
+download…" and does nothing until `WallpaperCacheManager` finishes it (or the selection changes,
+in which case the stale download is ignored when it completes).
+
+**Stopping playback doesn't clear anything.** `WallpaperManager.currentURL` becomes `nil` when
+stopped, at which point the coordinator's target falls back to
+`AppSettings.availableLastWallpaperURL()` — the same fallback each exporter's own `sourceURL`
+already used for a manual export — so the last export is simply left in place. The lock screen
+never goes blank just because playback paused.
+
+**Per-display assignments.** The system extension and the screen saver each show exactly one
+clip, so auto-sync always follows `WallpaperManager.currentURL` (the "All Displays" / primary
+assignment), the same source a manual export already used. Auto-syncing a *different* clip per
+display's lock screen is a follow-up, not covered here.
+
+**The screen saver is gated**, separately from its own on/off toggle, on whether it's actually in
+use: either `StarTorch.saver` is installed (checked at the well-known `~/Library/Screen Savers`
+and `/Library/Screen Savers` paths — the only reliably detectable signal short of asking
+`ScreenSaverDefaults`/`legacyScreenSaver`, which isn't available to a sandboxed, non-saver
+process) or it was exported at least once before. This keeps a user who has never touched the
+screen saver from paying for a background transcode by default; once they install it or sync it
+by hand once, auto-sync takes over.
+
+**Settings.** Each section (Screen Saver; Lock Screen & Desktop) has its own "Keep in sync
+automatically" toggle (`AppSettings.autoSyncSystemWallpaper` / `.autoSyncScreenSaver`, both
+default on), a one-line sync status, and a manual "Sync Now" button for exporting on demand
+regardless of the toggle. The menu bar panel shows a one-line nudge ("Lock screen: waiting for
+download…") only while the system wallpaper sync is waiting or failing; it's silent once it's
+caught up.
+
+**Tests** (`ikuyo-live-wallpaperTests/ExportCoordinatorTests.swift`) inject temp directories, a
+short debounce and a stubbed `URLSession` (no real network), and cover: one export after a debounce,
+coalescing rapid changes into one export of the last target, re-exporting on a readability change,
+skipping a no-op, waiting on a download and exporting once it completes, ignoring a stale download
+after the selection changes, the toggle turning auto-sync off without breaking manual sync, and a
+cancelled export leaving the previous manifest untouched.
+
 ## The private surface
 
 All private API lives in `StarTorchWallpaperExtension/Private/`, and each file starts with a
@@ -229,8 +290,10 @@ B97JTSGWZ2.
    4. Check registration: `pluginkit -m -p com.apple.wallpaper | grep shibuyaxpress` should list
       `com.shibuyaxpress.startorch-wallpaper.WallpaperExtension`.
 3. **Export.**
-   1. Play a local or downloaded wallpaper.
-   2. Open Settings (⌘,) › Lock Screen & Desktop (System Wallpaper) › **Export Current Wallpaper**.
+   1. Play a local or downloaded wallpaper. With auto-sync on (the default), that's enough — wait
+      a couple of seconds and Settings' "Synced" line should update on its own.
+   2. To force it immediately, open Settings (⌘,) › Lock Screen & Desktop (System Wallpaper) ›
+      **Sync Lock Screen Now**.
    3. The status should show the title and "now".
 4. **Select.**
    1. Click **Open Wallpaper Settings…**, or open System Settings › Wallpaper.

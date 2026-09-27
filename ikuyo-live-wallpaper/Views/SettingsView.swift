@@ -12,9 +12,10 @@ struct SettingsView: View {
     @Environment(ImportedWallpaperStore.self) private var importedStore
     @Environment(ScheduleService.self) private var scheduleService
     @Environment(ScreenSaverExporter.self) private var screenSaverExporter
+    @Environment(WallpaperExtensionExporter.self) private var systemWallpaperExporter
+    @Environment(ExportCoordinator.self) private var exportCoordinator
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var isShowingEnergySummary = false
-    @State private var systemWallpaperExporter = WallpaperExtensionExporter()
 
     var body: some View {
         Form {
@@ -231,18 +232,20 @@ struct SettingsView: View {
     }
 
     private var screenSaverSection: some View {
-        Section {
+        @Bindable var settings = settings
+        return Section {
+            Toggle("Keep in sync automatically", isOn: $settings.autoSyncScreenSaver)
             LabeledContent("Screen Saver Video") {
                 HStack {
                     if screenSaverExporter.isExporting {
                         ProgressView().controlSize(.small)
                     }
-                    Text(screenSaverStatusText)
+                    Text(exportCoordinator.screenSaverSyncPhase.statusText)
                         .foregroundStyle(.secondary)
                 }
             }
             HStack {
-                Button(screenSaverExporter.isExporting ? "Cancel Export" : "Export for Screen Saver") {
+                Button(screenSaverExporter.isExporting ? "Cancel Sync" : "Sync Screen Saver Now") {
                     if screenSaverExporter.isExporting {
                         screenSaverExporter.cancelExport()
                     } else {
@@ -264,18 +267,9 @@ struct SettingsView: View {
         } header: {
             Text("Screen Saver")
         } footer: {
-            Text("Export a wallpaper, install StarTorch, then choose it in Screen Saver settings. It plays when the screen saver starts and keeps playing over the lock screen if a password is required after the screen saver. Locking the screen directly shows the still desktop picture instead.")
+            Text("Install StarTorch and choose it in Screen Saver settings; it then keeps itself in sync with whatever you're playing. It plays when the screen saver starts and keeps playing over the lock screen if a password is required after the screen saver. Locking the screen directly shows the still desktop picture instead. \"Sync Screen Saver Now\" updates it immediately, on or off.")
         }
         .onAppear { screenSaverExporter.refreshStatus() }
-    }
-
-    private var screenSaverStatusText: String {
-        switch screenSaverExporter.status {
-        case .neverExported: String(localized: "Not exported")
-        case .upToDate(let date): String(localized: "Up to date (\(date.formatted(date: .abbreviated, time: .shortened)))")
-        case .stale: String(localized: "Out of date — export again")
-        case .failed(let message): String(localized: "Export failed: \(message)")
-        }
     }
 
     private var energySection: some View {
@@ -291,9 +285,17 @@ struct SettingsView: View {
     /// Route A: StarTorch's wallpaper extension, which macOS itself runs on the desktop and the
     /// lock screen once "StarTorch" is picked in System Settings › Wallpaper.
     private var systemWallpaperSection: some View {
-        Section {
-            LabeledContent("Exported") {
-                systemWallpaperStatus
+        @Bindable var settings = settings
+        return Section {
+            Toggle("Keep in sync automatically", isOn: $settings.autoSyncSystemWallpaper)
+            LabeledContent("Synced") {
+                HStack {
+                    if systemWallpaperExporter.isExporting {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(exportCoordinator.systemWallpaperSyncPhase.statusText)
+                        .foregroundStyle(.secondary)
+                }
             }
             if let error = systemWallpaperExporter.lastError {
                 Text(error)
@@ -301,13 +303,10 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
             HStack {
-                Button("Export for Lock Screen & Desktop") {
+                Button("Sync Lock Screen Now") {
                     exportCurrentWallpaper()
                 }
                 .disabled(systemWallpaperSourceURL == nil || systemWallpaperExporter.isExporting)
-                if systemWallpaperExporter.isExporting {
-                    ProgressView().controlSize(.small)
-                }
                 Spacer()
                 Button("Open Wallpaper Settings…") {
                     openWallpaperSettings()
@@ -316,23 +315,8 @@ struct SettingsView: View {
         } header: {
             Text("Lock Screen & Desktop (System Wallpaper)")
         } footer: {
-            Text("Export the wallpaper that's playing (or the last one you played), then choose StarTorch in System Settings › Wallpaper. macOS plays it on the desktop and the lock screen, even when this app isn't running. Export again after changing wallpapers. This uses a private macOS interface and may stop working after a macOS update.")
+            Text("Choose StarTorch in System Settings › Wallpaper. It then keeps itself in sync with whatever you're playing here (or the last one you played), even when this app isn't running. \"Sync Lock Screen Now\" updates it immediately, on or off. This uses a private macOS interface and may stop working after a macOS update.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var systemWallpaperStatus: some View {
-        switch systemWallpaperExporter.status {
-        case .exported(let manifest):
-            Text("\(manifest.title), \(manifest.exportedAt.formatted(.relative(presentation: .named)))")
-                .foregroundStyle(.secondary)
-        case .notExported:
-            Text("Nothing yet")
-                .foregroundStyle(.secondary)
-        case .unavailable:
-            Text("Unavailable in this build")
                 .foregroundStyle(.secondary)
         }
     }
@@ -461,16 +445,32 @@ private struct ScheduleTargetPicker: View {
     let settings = AppSettings()
     let library = WallpaperLibrary()
     let manager = WallpaperManager()
+    let cacheManager = WallpaperCacheManager()
+    let importedStore = ImportedWallpaperStore()
+    let screenSaverExporter = ScreenSaverExporter(
+        manager: manager,
+        settings: settings,
+        directory: .temporaryDirectory.appending(path: "screensaver-preview", directoryHint: .isDirectory)
+    )
+    let systemWallpaperExporter = WallpaperExtensionExporter()
     SettingsView()
-        .environment(WallpaperCacheManager())
+        .environment(cacheManager)
         .environment(settings)
         .environment(manager)
         .environment(library)
-        .environment(ImportedWallpaperStore())
+        .environment(importedStore)
         .environment(ScheduleService(manager: manager, library: library, settings: settings, observeSystemEvents: false))
-        .environment(ScreenSaverExporter(
+        .environment(screenSaverExporter)
+        .environment(systemWallpaperExporter)
+        .environment(ExportCoordinator(
             manager: manager,
             settings: settings,
-            directory: .temporaryDirectory.appending(path: "screensaver-preview", directoryHint: .isDirectory)
+            cacheManager: cacheManager,
+            systemWallpaperExporter: systemWallpaperExporter,
+            screenSaverExporter: screenSaverExporter,
+            titleForWallpaper: { url in
+                (library.catalog + importedStore.items).first { $0.url == url }?.name
+                    ?? url.deletingPathExtension().lastPathComponent
+            }
         ))
 }

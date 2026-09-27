@@ -10,6 +10,7 @@ struct MenuBarPanelView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(WallpaperManager.self) private var manager
     @Environment(WallpaperLibrary.self) private var library
+    @Environment(ExportCoordinator.self) private var exportCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -23,6 +24,8 @@ struct MenuBarPanelView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(Text("Paused, \(reason.label)"))
             }
+
+            autoSyncStatusLine
 
             if !library.favoriteCatalogItems.isEmpty {
                 Divider()
@@ -69,6 +72,28 @@ struct MenuBarPanelView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
+        }
+    }
+
+    // MARK: - Auto-sync
+
+    /// A one-line nudge when the system wallpaper sync is failing or waiting on a download.
+    /// Silent the rest of the time — an "up to date" line every time you open the panel would
+    /// just be noise.
+    @ViewBuilder
+    private var autoSyncStatusLine: some View {
+        if let text = autoSyncStatusText {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var autoSyncStatusText: String? {
+        switch exportCoordinator.systemWallpaperSyncPhase {
+        case .waitingForDownload: String(localized: "Lock screen: waiting for download")
+        case .failed: String(localized: "Lock screen sync failed — see Settings")
+        case .idle, .syncing, .upToDate: nil
         }
     }
 

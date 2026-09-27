@@ -16,6 +16,8 @@ final class AppSettings {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let schedule = "schedule"
         static let readabilityByWallpaper = "readabilityByWallpaper"
+        static let autoSyncSystemWallpaper = "autoSyncSystemWallpaper"
+        static let autoSyncScreenSaver = "autoSyncScreenSaver"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -98,6 +100,19 @@ final class AppSettings {
         readabilityByWallpaper[key] = value.isDefault ? nil : value
     }
 
+    // MARK: Auto-sync
+
+    /// Keep the system wallpaper extension (lock screen & desktop) in sync with the wallpaper
+    /// StarTorch is playing, with no manual export. See `ExportCoordinator`.
+    var autoSyncSystemWallpaper: Bool {
+        didSet { defaults.set(autoSyncSystemWallpaper, forKey: Key.autoSyncSystemWallpaper) }
+    }
+
+    /// Keep the screen saver's clip in sync the same way.
+    var autoSyncScreenSaver: Bool {
+        didSet { defaults.set(autoSyncScreenSaver, forKey: Key.autoSyncScreenSaver) }
+    }
+
     /// The pause rules for `PlaybackPolicy`. Screen sleep and a locked screen always pause.
     var pauseRules: PauseRules {
         PauseRules(
@@ -128,6 +143,8 @@ final class AppSettings {
         }
         readabilityByWallpaper = defaults.data(forKey: Key.readabilityByWallpaper)
             .flatMap { try? JSONDecoder().decode([String: ReadabilitySettings].self, from: $0) } ?? [:]
+        autoSyncSystemWallpaper = defaults.object(forKey: Key.autoSyncSystemWallpaper) as? Bool ?? true
+        autoSyncScreenSaver = defaults.object(forKey: Key.autoSyncScreenSaver) as? Bool ?? true
     }
 
     /// `lastWallpaperURL`, unless it is a local file that no longer exists (e.g. it was trashed).

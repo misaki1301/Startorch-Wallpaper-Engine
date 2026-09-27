@@ -52,6 +52,7 @@ final class WallpaperExtensionExporter {
     @ObservationIgnored private let directory: URL?
     @ObservationIgnored private let writePoster: PosterWriter
     @ObservationIgnored private var resolvedStore: SystemWallpaperStore??
+    @ObservationIgnored private var exportTask: Task<SystemWallpaperManifest, any Error>?
 
     /// `directory` replaces the App Group container (tests).
     init(directory: URL? = nil, writePoster: @escaping PosterWriter = { await WallpaperExtensionExporter.writeFirstFrame(of: $0, to: $1) }) {
@@ -87,9 +88,12 @@ final class WallpaperExtensionExporter {
             return false
         }
         isExporting = true
-        defer { isExporting = false }
-        do {
-            let manifest = try await Self.performExport(
+        defer {
+            isExporting = false
+            exportTask = nil
+        }
+        let task = Task {
+            try await Self.performExport(
                 sourceURL: sourceURL,
                 playbackURL: playbackURL,
                 title: title,
@@ -97,15 +101,51 @@ final class WallpaperExtensionExporter {
                 store: store,
                 writePoster: writePoster
             )
+        }
+        exportTask = task
+        do {
+            let manifest = try await task.value
             status = .exported(manifest)
             lastError = nil
             Self.log.notice("exported \(sourceURL.lastPathComponent, privacy: .public) for the system wallpaper extension")
             return true
+        } catch is CancellationError {
+            // The manifest write is the last step, so a cancellation before it leaves the
+            // previous export untouched; only `refreshStatus()` needs to run to be sure.
+            refreshStatus()
+            Self.log.notice("export cancelled")
+            return false
         } catch {
             lastError = error.localizedDescription
             Self.log.error("export failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
+    }
+
+    /// Cancels a running export; the previous export stays in place (the manifest is only
+    /// written once every earlier step has finished).
+    func cancelExport() {
+        exportTask?.cancel()
+    }
+
+    /// Whether the last export already matches `sourceURL` and `readability` — a no-op check so
+    /// auto-sync doesn't re-copy and re-encode a clip that's already current.
+    func matchesCurrentExport(sourceURL: URL, readability: ReadabilitySettings) -> Bool {
+        guard case .exported(let manifest) = status else { return false }
+        let clamped = readability.clamped
+        return manifest.sourceURL == sourceURL.absoluteString
+            && manifest.dim == clamped.dim
+            && manifest.vignette == clamped.vignette
+            && manifest.speed == clamped.speed
+    }
+
+    /// A compact, observable summary of `status`/`isExporting`/`lastError` for the UI. See
+    /// `WallpaperSyncPhase`.
+    var syncPhase: WallpaperSyncPhase {
+        if isExporting { return .syncing }
+        if let lastError { return .failed(lastError) }
+        if case .exported(let manifest) = status { return .upToDate(manifest.exportedAt) }
+        return .idle
     }
 
     // MARK: - Export steps (off the main actor)
@@ -143,6 +183,7 @@ final class WallpaperExtensionExporter {
             try fileManager.copyItem(at: playbackURL, to: partial)
             try fileManager.moveItem(at: partial, to: clipURL)
         }
+        try Task.checkCancellation()
 
         // 2. The poster (non-fatal: the extension shows black until the video's first frame).
         let posterName = "\(base).jpg"
@@ -155,6 +196,7 @@ final class WallpaperExtensionExporter {
             }
             try? fileManager.removeItem(at: partial)
         }
+        try Task.checkCancellation()
 
         // 3. The manifest, atomically, last.
         let manifest = SystemWallpaperManifest(
