@@ -90,3 +90,18 @@ AppKit usually leaves borderless windows unconstrained, so B is at least as like
 2. Window subclass and the frame comparison fix, with their tests (step 2).
 3. `MenuBarContrast` height, with its test (step 4).
 4. Step 3, depending on the diagnostic result.
+
+## Status
+
+Steps 1, 2, 4 and 5 are implemented: `DesktopWallpaperWindow`, the frame re-assert, the `integral` comparison, the measured menu bar height, and the tests.
+
+The placement log is at debug level, so it's always available. To read it, run:
+
+```sh
+log stream --level debug --predicate 'subsystem == "com.shibuyaxpress.startorch-wallpaper" && category == "DesktopWindow"'
+```
+
+Read the window's frame and server bounds against the screen frame:
+
+- **They match the screen frame and the strip is still static:** it's hypothesis B, so step 3 is next.
+- **They start below the menu bar:** the subclass should have fixed it.

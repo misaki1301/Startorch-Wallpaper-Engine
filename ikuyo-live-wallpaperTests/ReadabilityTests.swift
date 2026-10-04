@@ -82,6 +82,15 @@ struct MenuBarContrastTests {
         #expect(analysis.meanLuminance < 0.01)
     }
 
+    @Test func aTallerMenuBarSamplesMoreOfTheImage() throws {
+        // 10 dark rows, bright below. For a 240 pt display a 24 pt menu bar covers the dark rows
+        // only; a 48 pt one (notch, macOS 26) reaches 10 bright rows too.
+        let image = makeImage(topRows: 10, top: srgb(0.05), bottom: srgb(1))
+        let short = try #require(MenuBarContrast.analyze(image, screenHeight: 240, menuBarHeight: 24))
+        let tall = try #require(MenuBarContrast.analyze(image, screenHeight: 240, menuBarHeight: 48))
+        #expect(tall.meanLuminance > short.meanLuminance + 0.2)
+    }
+
     @Test func dimmingDarkensTheStrip() throws {
         let image = makeImage(top: srgb(1))
         let plain = try #require(MenuBarContrast.analyze(image, screenHeight: 240))

@@ -58,7 +58,8 @@ nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
         added = Set(screens.keys).subtracting(windows.keys)
         removed = Set(windows.keys).subtracting(screens.keys)
         resized = Set(screens.compactMap { id, frame in
-            windows[id].flatMap { $0 == frame ? nil : id }
+            // Sub-point differences aren't a move.
+            windows[id].flatMap { $0.integral == frame.integral ? nil : id }
         })
     }
 }
@@ -71,11 +72,11 @@ nonisolated struct ScreenLayoutChanges: Equatable, Sendable {
 /// video (the desktop picture). All of it is instant with Reduce Motion.
 final class WallpaperController: WallpaperPresenting {
     private final class DesktopWindow {
-        let window: NSWindow
+        let window: DesktopWallpaperWindow
         var content: WallpaperLayerStack
         var url: URL
 
-        init(window: NSWindow, content: WallpaperLayerStack, url: URL) {
+        init(window: DesktopWallpaperWindow, content: WallpaperLayerStack, url: URL) {
             self.window = window
             self.content = content
             self.url = url
@@ -125,7 +126,7 @@ final class WallpaperController: WallpaperPresenting {
     }
 
     var windowsByDisplay: [String: NSWindow] {
-        desktopWindows.mapValues(\.window)
+        desktopWindows.mapValues { $0.window }
     }
 
     init(restorer: DesktopRestorer) {
@@ -160,8 +161,9 @@ final class WallpaperController: WallpaperPresenting {
             desktopWindows.removeValue(forKey: id)?.close()
         }
         for id in changes.resized {
-            guard let frame = targets[id]?.frame else { continue }
-            desktopWindows[id]?.window.setFrame(frame, display: true)
+            guard let screen = targets[id], let window = desktopWindows[id]?.window else { continue }
+            window.setFrame(screen.frame, display: true)
+            window.logPlacement(on: screen)
         }
 
         let plan = DisplayTransition.plan(
@@ -340,7 +342,7 @@ final class WallpaperController: WallpaperPresenting {
         contentView.layerUsesCoreImageFilters = true
         contentView.layer?.addSublayer(content.root)
 
-        let window = NSWindow(
+        let window = DesktopWallpaperWindow(
             contentRect: screen.frame,
             styleMask: .borderless,
             backing: .buffered,
@@ -356,6 +358,9 @@ final class WallpaperController: WallpaperPresenting {
         window.contentView = contentView
         window.alphaValue = visible ? 1 : 0
         window.orderFrontRegardless()
+        // Ordering in can move a window clear of the menu bar; it belongs under it.
+        window.setFrame(screen.frame, display: false)
+        window.logPlacement(on: screen)
 
         return DesktopWindow(window: window, content: content, url: wallpaper.url)
     }

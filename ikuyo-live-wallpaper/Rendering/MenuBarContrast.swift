@@ -10,8 +10,9 @@ import Foundation
 /// and reports how much of the strip falls below a 3:1 contrast ratio (WCAG's minimum for large
 /// or bold text) with the text color macOS would choose. Blur and vignette are not modeled.
 nonisolated enum MenuBarContrast {
-    /// Menu bar height in points.
-    static let menuBarHeight: CGFloat = 24
+    /// Menu bar height in points, for displays that don't report one (the menu bar auto-hides).
+    /// Notched displays and macOS 26 have taller menu bars.
+    static let defaultMenuBarHeight: CGFloat = 24
     static let minimumContrast = 3.0
     /// The share of the strip allowed to fall below `minimumContrast` before we warn.
     static let tolerance = 0.2
@@ -40,11 +41,17 @@ nonisolated enum MenuBarContrast {
         (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
 
-    /// Analyzes the top of `image` as it would sit under the menu bar of a display `screenHeight`
-    /// points tall (the image filling the display), with `dim` (0...1) applied. Nil if the image
-    /// can't be read.
-    static func analyze(_ image: CGImage, screenHeight: CGFloat = 982, dim: Double = 0) -> Analysis? {
+    /// Analyzes the top of `image` as it would sit under a `menuBarHeight` points tall menu bar of
+    /// a display `screenHeight` points tall (the image filling the display), with `dim` (0...1)
+    /// applied. Nil if the image can't be read.
+    static func analyze(
+        _ image: CGImage,
+        screenHeight: CGFloat = 982,
+        menuBarHeight: CGFloat = defaultMenuBarHeight,
+        dim: Double = 0
+    ) -> Analysis? {
         guard image.width > 0, image.height > 0, screenHeight > 0 else { return nil }
+        let menuBarHeight = menuBarHeight > 0 ? menuBarHeight : defaultMenuBarHeight
         let rows = max(1, Int((CGFloat(image.height) * menuBarHeight / screenHeight).rounded(.up)))
         guard let strip = image.cropping(to: CGRect(x: 0, y: 0, width: image.width, height: min(rows, image.height))),
               let samples = samples(of: strip) else { return nil }
