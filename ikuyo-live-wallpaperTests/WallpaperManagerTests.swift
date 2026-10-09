@@ -309,6 +309,34 @@ struct ScreenLayoutChangesTests {
         let changes = ScreenLayoutChanges(windows: ["1": builtIn, "2": external], screens: ["1": builtIn, "2": moved])
         #expect(changes == ScreenLayoutChanges(resized: ["2"]))
     }
+
+    @Test func aWindowPushedBelowTheMenuBarIsResized() {
+        let belowMenuBar = CGRect(x: 0, y: 0, width: 1512, height: 982 - 24)
+        let changes = ScreenLayoutChanges(windows: ["1": belowMenuBar], screens: ["1": builtIn])
+        #expect(changes == ScreenLayoutChanges(resized: ["1"]))
+    }
+
+    @Test func subPointRoundingIsNotAResize() {
+        let rounded = CGRect(x: 0, y: 0.0001, width: 1512, height: 981.9999)
+        let changes = ScreenLayoutChanges(windows: ["1": rounded], screens: ["1": builtIn])
+        #expect(changes.isEmpty)
+    }
+}
+
+@MainActor
+struct DesktopWallpaperWindowTests {
+    @Test func staysWhereItIsPutEvenUnderTheMenuBar() {
+        let window = DesktopWallpaperWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true)
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let frame = screen?.frame ?? CGRect(x: 0, y: 0, width: 1512, height: 982)
+        #expect(window.constrainFrameRect(frame, to: screen) == frame)
+    }
+
+    @Test func neverTakesFocus() {
+        let window = DesktopWallpaperWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true)
+        #expect(!window.canBecomeKey)
+        #expect(!window.canBecomeMain)
+    }
 }
 
 @MainActor

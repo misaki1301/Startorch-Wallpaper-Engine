@@ -31,7 +31,12 @@ struct WallpaperInspectorView: View {
 
     private var contrast: MenuBarContrast.Analysis? {
         posterImage.flatMap {
-            MenuBarContrast.analyze($0, screenHeight: NSScreen.main?.frame.height ?? 982, dim: readability.wrappedValue.dim)
+            MenuBarContrast.analyze(
+                $0,
+                screenHeight: NSScreen.main?.frame.height ?? 982,
+                menuBarHeight: NSScreen.main?.menuBarHeight ?? MenuBarContrast.defaultMenuBarHeight,
+                dim: readability.wrappedValue.dim
+            )
         }
     }
 
@@ -186,5 +191,13 @@ struct WallpaperInspectorView: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+}
+
+private extension NSScreen {
+    /// The menu bar's height on this display, 0 while it auto-hides. Notched displays report it
+    /// as their top safe area.
+    var menuBarHeight: CGFloat {
+        max(safeAreaInsets.top, frame.maxY - visibleFrame.maxY)
     }
 }
